@@ -23,6 +23,7 @@ interface HomeProps {
   onReset: () => void;
   onExportState: () => void;
   onImportState: (file: File) => void | Promise<void>;
+  isModoEnabled: boolean;
 }
 
 interface CalendarDay {
@@ -167,7 +168,8 @@ export default function Home({
   gamificationState,
   onReset,
   onExportState,
-  onImportState
+  onImportState,
+  isModoEnabled
 }: HomeProps): JSX.Element {
   const sessionsXp = state.sessions.reduce((sum, s) => sum + s.xp, 0);
   const totalXp = sessionsXp + state.bonusXp;
@@ -341,23 +343,25 @@ export default function Home({
           </span>
         </div>
 
-        <div className="home-actions">
-          <button type="button" className="btn-compact" onClick={onExportState}>
-            Export JSON
-          </button>
-          <label className="import-label btn-compact">
-            Import JSON
-            <input
-              type="file"
-              accept="application/json"
-              onChange={handleImportFile}
-              className="import-input"
-            />
-          </label>
-          <button type="button" className="danger btn-compact" onClick={handleReset}>
-            Reset
-          </button>
-        </div>
+        {isModoEnabled ? (
+          <div className="home-actions">
+            <button type="button" className="btn-compact" onClick={onExportState}>
+              Export JSON
+            </button>
+            <label className="import-label btn-compact">
+              Import JSON
+              <input
+                type="file"
+                accept="application/json"
+                onChange={handleImportFile}
+                className="import-input"
+              />
+            </label>
+            <button type="button" className="danger btn-compact" onClick={handleReset}>
+              Reset
+            </button>
+          </div>
+        ) : null}
       </article>
 
       <article className="card premium-section week-calendar-card">

@@ -152,7 +152,7 @@ export default function Progression({
   );
   const isDevMode =
     typeof window !== 'undefined' &&
-    window.localStorage.getItem('nivelr_dev_unlock_progression') === '1';
+    window.localStorage.getItem('nivelr_modo_enabled') === '1';
 
   const selectedGoalOption = selectedGoalType
     ? GOAL_OPTIONS.find((option) => option.id === selectedGoalType) ?? null
@@ -353,7 +353,7 @@ export default function Progression({
               {isDevMode ? (
                 <div className="goal-target-actions">
                   <button type="button" className="btn-compact" onClick={onResetMonthlyChallenge}>
-                    Réinitialiser le défi mensuel (test)
+                    Réinitialiser le défi mensuel (modo)
                   </button>
                 </div>
               ) : null}
@@ -442,7 +442,7 @@ export default function Progression({
               {isDevMode ? (
                 <div className="goal-target-actions">
                   <button type="button" className="btn-compact" onClick={onResetGoal8Weeks}>
-                    Réinitialiser cet objectif (test)
+                    Réinitialiser cet objectif (modo)
                   </button>
                 </div>
               ) : null}

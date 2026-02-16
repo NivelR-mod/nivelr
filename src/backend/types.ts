@@ -6,6 +6,14 @@ export interface AuthSessionUser {
   createdAt: string;
 }
 
+export type SubscriptionPlan = 'FREE_S1' | 'PREMIUM' | 'FOUNDER';
+
+export interface UserSubscriptionInfo {
+  plan: SubscriptionPlan;
+  status: 'ACTIVE' | 'INACTIVE';
+  renewalDate?: string;
+}
+
 export interface ContactRequest {
   id: string;
   requesterUserId: string;

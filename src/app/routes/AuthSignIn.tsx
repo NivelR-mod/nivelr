@@ -1,21 +1,41 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BACKEND_FLAGS, BACKEND_PROVIDER } from '../../backend/config';
-import { getCurrentSessionUser, signInLocal, signOutLocal, signUpLocal } from '../../backend/localAuth';
+import {
+  ensureModoSession,
+  getCurrentSessionUser,
+  isModoEnabledLocal,
+  signInLocal,
+  signOutLocal,
+  signUpLocal
+} from '../../backend/localAuth';
 
 export default function AuthSignIn(): JSX.Element {
   const [mode, setMode] = useState<'SIGN_IN' | 'SIGN_UP'>('SIGN_IN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [handle, setHandle] = useState('');
   const [message, setMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
   const session = useMemo(() => getCurrentSessionUser(), [message]);
+  const modoEnabled = isModoEnabledLocal();
+
+  useEffect(() => {
+    if (!modoEnabled) return;
+    if (session) return;
+    const modoUser = ensureModoSession();
+    setMessage(`Connexion instantanée activée (${modoUser.displayName}).`);
+  }, [modoEnabled, session]);
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     setError('');
     setMessage('');
+
+    if (modoEnabled) {
+      const modoUser = ensureModoSession();
+      setMessage(`Connexion instantanée activée (${modoUser.displayName}).`);
+      return;
+    }
 
     if (mode === 'SIGN_IN') {
       const result = signInLocal(email, password);
@@ -27,7 +47,7 @@ export default function AuthSignIn(): JSX.Element {
       return;
     }
 
-    const created = signUpLocal({ email, password, displayName, handle });
+    const created = signUpLocal({ email, password, displayName });
     if (created.error) {
       setError(created.error);
       return;
@@ -41,6 +61,9 @@ export default function AuthSignIn(): JSX.Element {
       <p className="page-subtitle">
         Etat backend: <strong>{BACKEND_PROVIDER}</strong> · Flags: auth={String(BACKEND_FLAGS.authEnabled)}
       </p>
+      {modoEnabled ? (
+        <p className="inline-info">Mode modérateur actif: clique sur Connexion pour entrer sans identifiants.</p>
+      ) : null}
 
       {session ? (
         <article className="card premium-section">
@@ -71,41 +94,43 @@ export default function AuthSignIn(): JSX.Element {
           </button>
         </div>
 
-        {mode === 'SIGN_UP' ? (
+        {!modoEnabled && mode === 'SIGN_UP' ? (
           <>
             <label>
               Nom affiché
               <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
             </label>
+          </>
+        ) : null}
+
+        {!modoEnabled ? (
+          <>
             <label>
-              Handle (unique)
-              <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="ex: nivo_runner" />
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Mot de passe
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </label>
           </>
         ) : null}
 
-        <label>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Mot de passe
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-
-        {error ? <p className="error">{error}</p> : null}
+        {error ? <p className="error pseudo-error-note">{error}</p> : null}
         {message ? <p className="inline-info">{message}</p> : null}
-        <button type="submit">{mode === 'SIGN_IN' ? 'Se connecter' : 'Créer mon compte'}</button>
+        <button type="submit">
+          {modoEnabled ? 'Connexion instantanée' : mode === 'SIGN_IN' ? 'Se connecter' : 'Créer mon compte'}
+        </button>
       </form>
     </section>
   );

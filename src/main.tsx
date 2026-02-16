@@ -13,8 +13,13 @@ import AuthSignIn from './app/routes/AuthSignIn';
 import Profile from './app/routes/Profile';
 import Subscription from './app/routes/Subscription';
 import Users from './app/routes/Users';
+import {
+  getCurrentSessionUser,
+  LOCAL_AUTH_CHANGED_EVENT,
+  setModoEnabledLocal
+} from './backend/localAuth';
 import { getMissions, getMissionStatus } from './domain/missions';
-import { getLevelFromXp } from './domain/levels';
+import { getLevelFromXp, getXpToNextLevel } from './domain/levels';
 import { createSession } from './domain/sessions';
 import Toast, { ToastKind } from './components/Toast';
 import {
@@ -157,9 +162,10 @@ function App(): JSX.Element {
   const [pendingImport, setPendingImport] = useState<ImportPreviewState | null>(null);
   const [deletedBuffer, setDeletedBuffer] = useState<{ session: Session; timeoutId: number } | null>(null);
   const [unlockModalLevels, setUnlockModalLevels] = useState<number[]>([]);
-  const [devUnlockMode, setDevUnlockMode] = useState<boolean>(() => {
+  const [sessionUser, setSessionUser] = useState(() => getCurrentSessionUser());
+  const [modoEnabled, setModoEnabled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem('nivelr_dev_unlock_progression') === '1';
+    return window.localStorage.getItem('nivelr_modo_enabled') === '1';
   });
 
   const totalXp = state.sessions.reduce((sum, session) => sum + session.xp, 0) + state.bonusXp;
@@ -167,10 +173,14 @@ function App(): JSX.Element {
   const displayLevel = GAMIFICATION_V1_ENABLED
     ? gamificationState.userLevel.level
     : getLevelFromXp(displayXp);
-  const canAccessStats = devUnlockMode || displayLevel >= 5;
-  const canAccessMonthly = devUnlockMode || displayLevel >= 10;
-  const canAccessSeason = devUnlockMode || displayLevel >= 15;
-  const canAccessGoal = devUnlockMode || displayLevel >= 20;
+  const canAccessStats = modoEnabled || displayLevel >= 5;
+  const canAccessMonthly = modoEnabled || displayLevel >= 10;
+  const canAccessSeason = modoEnabled || displayLevel >= 15;
+  const canAccessGoal = modoEnabled || displayLevel >= 20;
+  const xpToNextLevel = GAMIFICATION_V1_ENABLED
+    ? gamificationState.userLevel.xpToNextLevel
+    : getXpToNextLevel(displayXp);
+  const xpTarget = xpToNextLevel > 0 ? displayXp + xpToNextLevel : displayXp;
   const currentWeekKey = getCurrentWeekKey();
   const weekSessions = state.sessions.filter(
     (session) => getWeekKeyFromDate(new Date(session.createdAt)) === currentWeekKey
@@ -198,17 +208,11 @@ function App(): JSX.Element {
     }, duration);
   };
 
-  const toggleDevUnlockMode = (): void => {
-    if (typeof window === 'undefined') return;
-    const next = !devUnlockMode;
-    if (next) {
-      window.localStorage.setItem('nivelr_dev_unlock_progression', '1');
-      showToast('info', 'Mode test activé: modules progression temporairement déverrouillés.');
-    } else {
-      window.localStorage.removeItem('nivelr_dev_unlock_progression');
-      showToast('info', 'Mode test désactivé.');
-    }
-    setDevUnlockMode(next);
+  const toggleModo = (): void => {
+    const next = !modoEnabled;
+    setModoEnabledLocal(next);
+    setModoEnabled(next);
+    showToast('info', next ? 'Mode modérateur activé.' : 'Mode modérateur désactivé.');
   };
 
   const renderLockedPage = (title: string, unlockLevel: number, hint: string): JSX.Element => (
@@ -218,6 +222,20 @@ function App(): JSX.Element {
         <div className="week-curve-locked-wrap progression-lock-wrap">
           <div className="week-curve-lock-overlay">
             <p className="week-curve-lock-title">🔒 Débloqué au niveau {unlockLevel}</p>
+            <p>{hint}</p>
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+
+  const renderAuthLockedPage = (title: string, hint: string): JSX.Element => (
+    <section className="page">
+      <h1>{title}</h1>
+      <article className="card premium-section week-curve-card is-locked">
+        <div className="week-curve-locked-wrap progression-lock-wrap">
+          <div className="week-curve-lock-overlay">
+            <p className="week-curve-lock-title">🔒 Connexion requise</p>
             <p>{hint}</p>
           </div>
         </div>
@@ -248,6 +266,19 @@ function App(): JSX.Element {
   }, [state.sessions, gamificationState.userLevel.level]);
 
   useEffect(() => {
+    const syncSession = (): void => {
+      setSessionUser(getCurrentSessionUser());
+      setModoEnabled(window.localStorage.getItem('nivelr_modo_enabled') === '1');
+    };
+    window.addEventListener(LOCAL_AUTH_CHANGED_EVENT, syncSession);
+    window.addEventListener('storage', syncSession);
+    return () => {
+      window.removeEventListener(LOCAL_AUTH_CHANGED_EVENT, syncSession);
+      window.removeEventListener('storage', syncSession);
+    };
+  }, []);
+
+  useEffect(() => {
     const id = window.setInterval(() => {
       const currentWeek = getCurrentWeekKey();
       setState((prev) =>
@@ -262,6 +293,26 @@ function App(): JSX.Element {
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    if (!import.meta.env.PROD) {
+      const cleanupDevServiceWorker = async (): Promise<void> => {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((reg) => reg.unregister()));
+          if ('caches' in window) {
+            const keys = await window.caches.keys();
+            await Promise.all(
+              keys
+                .filter((key) => key.startsWith('sportxp-cache') || key.startsWith('nivelr-cache'))
+                .map((key) => window.caches.delete(key))
+            );
+          }
+        } catch (error) {
+          console.warn('SW cleanup dev failed', error);
+        }
+      };
+      cleanupDevServiceWorker();
+      return;
+    }
     const register = async (): Promise<void> => {
       try {
         await navigator.serviceWorker.register('/sw.js');
@@ -645,118 +696,125 @@ function App(): JSX.Element {
 
   return (
     <BrowserRouter>
-      <div className="app-shell">
-        <aside className="app-sidebar">
-          <div className="brand-block">
-            <div className="brand-logo-shell">
-              <img src="/nivelr-logo.jpg" alt="NIVELR" className="brand-logo" />
+      <div className={`app-shell ${sessionUser ? 'is-authenticated' : 'is-guest'}`}>
+        {sessionUser ? (
+          <aside className="app-sidebar">
+            <div className="brand-block">
+              <div className="brand-logo-shell">
+                <img src="/nivelr-logo.jpg" alt="NIVELR" className="brand-logo" />
+              </div>
+              <p className="brand-description">
+                Earn Your Level.
+              </p>
+              <div className="sidebar-sport-glance">
+                <span>{weekSessions.length} seance(s)</span>
+                <span>{weekMinutes} min</span>
+                <span>{weekDistance.toFixed(1)} km</span>
+              </div>
             </div>
-            <p className="brand-description">
-              NIVELR. Earn Your Level.
-            </p>
-            <div className="sidebar-sport-glance">
-              <span>{weekSessions.length} seance(s)</span>
-              <span>{weekMinutes} min</span>
-              <span>{weekDistance.toFixed(1)} km</span>
-            </div>
-          </div>
 
-          <nav>
-            <NavLink to="/explications">Accueil</NavLink>
-            <NavLink to="/add-session">Nouvelle séance</NavLink>
-            <NavLink to="/sessions">Sessions</NavLink>
-            <NavLink to="/missions">Missions</NavLink>
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                [isActive ? 'active' : '', !canAccessStats ? 'is-disabled' : '']
-                  .filter(Boolean)
-                  .join(' ')
-              }
-              onClick={(event) => {
-                if (!canAccessStats) event.preventDefault();
-              }}
-              aria-disabled={!canAccessStats}
-            >
-              <span className="nav-link-row">
-                <span>Statistiques</span>
-                {!canAccessStats ? <small className="nav-lock">🔒 N5</small> : null}
-              </span>
-            </NavLink>
-            <NavLink
-              to="/defi-mensuel"
-              className={({ isActive }) =>
-                [isActive ? 'active' : '', !canAccessMonthly ? 'is-disabled' : '']
-                  .filter(Boolean)
-                  .join(' ')
-              }
-              onClick={(event) => {
-                if (!canAccessMonthly) event.preventDefault();
-              }}
-              aria-disabled={!canAccessMonthly}
-            >
-              <span className="nav-link-row">
-                <span>Défi mensuel</span>
-                {!canAccessMonthly ? <small className="nav-lock">🔒 N10</small> : null}
-              </span>
-            </NavLink>
-            <NavLink
-              to="/season"
-              className={({ isActive }) =>
-                [isActive ? 'active' : '', !canAccessSeason ? 'is-disabled' : '']
-                  .filter(Boolean)
-                  .join(' ')
-              }
-              onClick={(event) => {
-                if (!canAccessSeason) event.preventDefault();
-              }}
-              aria-disabled={!canAccessSeason}
-            >
-              <span className="nav-link-row">
-                <span>Saison</span>
-                {!canAccessSeason ? <small className="nav-lock">🔒 N15</small> : null}
-              </span>
-            </NavLink>
-            <NavLink
-              to="/objectif-personnel"
-              className={({ isActive }) =>
-                [isActive ? 'active' : '', !canAccessGoal ? 'is-disabled' : '']
-                  .filter(Boolean)
-                  .join(' ')
-              }
-              onClick={(event) => {
-                if (!canAccessGoal) event.preventDefault();
-              }}
-              aria-disabled={!canAccessGoal}
-            >
-              <span className="nav-link-row">
-                <span>Objectif personnel</span>
-                {!canAccessGoal ? <small className="nav-lock">🔒 N20</small> : null}
-              </span>
-            </NavLink>
-            <NavLink to="/guide-xp">Guide XP</NavLink>
-            <NavLink to="/connexion">Connexion</NavLink>
-            <NavLink to="/profil">Profil</NavLink>
-            <NavLink to="/utilisateurs">Utilisateurs</NavLink>
-            <NavLink to="/abonnement">Abonnement</NavLink>
-          </nav>
+            <nav>
+              <NavLink to="/add-session">Nouvelle séance</NavLink>
+              <NavLink to="/sessions">Sessions</NavLink>
+              <NavLink to="/missions">Missions</NavLink>
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessStats ? 'is-disabled' : '']
+                    .filter(Boolean)
+                    .join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessStats) event.preventDefault();
+                }}
+                aria-disabled={!canAccessStats}
+              >
+                <span className="nav-link-row">
+                  <span>Statistiques</span>
+                  {!canAccessStats ? <small className="nav-lock">🔒 N5</small> : null}
+                </span>
+              </NavLink>
+              <NavLink
+                to="/defi-mensuel"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessMonthly ? 'is-disabled' : '']
+                    .filter(Boolean)
+                    .join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessMonthly) event.preventDefault();
+                }}
+                aria-disabled={!canAccessMonthly}
+              >
+                <span className="nav-link-row">
+                  <span>Défi mensuel</span>
+                  {!canAccessMonthly ? <small className="nav-lock">🔒 N10</small> : null}
+                </span>
+              </NavLink>
+              <NavLink
+                to="/season"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessSeason ? 'is-disabled' : '']
+                    .filter(Boolean)
+                    .join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessSeason) event.preventDefault();
+                }}
+                aria-disabled={!canAccessSeason}
+              >
+                <span className="nav-link-row">
+                  <span>Saison</span>
+                  {!canAccessSeason ? <small className="nav-lock">🔒 N15</small> : null}
+                </span>
+              </NavLink>
+              <NavLink
+                to="/objectif-personnel"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessGoal ? 'is-disabled' : '']
+                    .filter(Boolean)
+                    .join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessGoal) event.preventDefault();
+                }}
+                aria-disabled={!canAccessGoal}
+              >
+                <span className="nav-link-row">
+                  <span>Objectif personnel</span>
+                  {!canAccessGoal ? <small className="nav-lock">🔒 N20</small> : null}
+                </span>
+              </NavLink>
+              <NavLink to="/guide-xp">Guide XP</NavLink>
+            </nav>
 
-          <div className="sidebar-foot">
-            <div className="sidebar-metric">
-              <span>Niveau actuel</span>
-              <strong>{displayLevel}</strong>
-            </div>
-            <div className="sidebar-metric">
-              <span>Total XP</span>
-              <strong>{displayXp}</strong>
-            </div>
-            <button type="button" className="btn-compact sidebar-test-btn" onClick={toggleDevUnlockMode}>
-              {devUnlockMode ? 'Mode test: ON' : 'Mode test: OFF'}
-            </button>
-          </div>
-        </aside>
+          </aside>
+        ) : null}
 
         <div className="app-content">
+          <header className="topbar topbar-global">
+            <nav className="topbar-links" aria-label="Navigation globale">
+              <button type="button" className={`modo-toggle-btn ${modoEnabled ? 'is-on' : ''}`} onClick={toggleModo}>
+                {modoEnabled ? 'Modo ON' : 'Modo OFF'}
+              </button>
+              <NavLink to="/explications">Accueil</NavLink>
+              {sessionUser ? <NavLink to="/utilisateurs">Communauté</NavLink> : null}
+              {modoEnabled ? <NavLink to="/abonnement">Abonnement</NavLink> : null}
+              {sessionUser ? (
+                <>
+                  <NavLink to="/profil" className="topbar-profile-link">
+                    <span>Profil</span>
+                  </NavLink>
+                  <div className="topbar-profile-meta" aria-label="Niveau et progression XP">
+                    <small>Lvl {displayLevel}</small>
+                    <small>{displayXp}xp/{xpTarget}xp</small>
+                  </div>
+                </>
+              ) : (
+                <NavLink to="/connexion">Login</NavLink>
+              )}
+            </nav>
+          </header>
           <main>
             {toast ? (
               <Toast
@@ -842,6 +900,7 @@ function App(): JSX.Element {
                       onReset={onReset}
                       onExportState={onExportState}
                       onImportState={onImportState}
+                      isModoEnabled={modoEnabled}
                     />
                   ) : (
                     renderLockedPage(
@@ -895,8 +954,32 @@ function App(): JSX.Element {
               />
               <Route path="/connexion" element={<AuthSignIn />} />
               <Route path="/profil" element={<Profile />} />
-              <Route path="/utilisateurs" element={<Users />} />
-              <Route path="/abonnement" element={<Subscription />} />
+              <Route
+                path="/utilisateurs"
+                element={
+                  sessionUser ? (
+                    <Users />
+                  ) : (
+                    renderAuthLockedPage(
+                      'Communauté',
+                      'Connecte-toi pour rechercher des coureurs et gérer tes contacts.'
+                    )
+                  )
+                }
+              />
+              <Route
+                path="/abonnement"
+                element={
+                  modoEnabled ? (
+                    <Subscription />
+                  ) : (
+                    renderAuthLockedPage(
+                      'Abonnement',
+                      'Cette section est temporairement indisponible.'
+                    )
+                  )
+                }
+              />
               <Route
                 path="/progression"
                 element={

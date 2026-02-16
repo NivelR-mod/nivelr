@@ -24,7 +24,7 @@ function toDayKey(date: Date): string {
 
 function isDevProgressionUnlockEnabled(): boolean {
   if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem('nivelr_dev_unlock_progression') === '1';
+  return window.localStorage.getItem('nivelr_modo_enabled') === '1';
 }
 
 export function toMonthKey(date: Date): string {
