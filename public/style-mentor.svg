@@ -1,0 +1,15 @@
+<svg width="420" height="220" viewBox="0 0 420 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d">
+  <title id="t">Style Mentor</title>
+  <desc id="d">Illustration abstraite du style Mentor.</desc>
+  <defs>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a1ff"/>
+      <stop offset="100%" stop-color="#6f4fd4"/>
+    </linearGradient>
+  </defs>
+  <rect width="420" height="220" rx="22" fill="#1d1a2d"/>
+  <circle cx="210" cy="110" r="66" fill="none" stroke="url(#g2)" stroke-width="12"/>
+  <circle cx="210" cy="110" r="30" fill="#b68fff" opacity="0.35"/>
+  <path d="M210 26 L228 74 L278 80 L239 112 L250 162 L210 136 L170 162 L181 112 L142 80 L192 74 Z" fill="#ead8ff" opacity="0.78"/>
+  <text x="24" y="34" fill="#efe4ff" font-size="20" font-family="Manrope, sans-serif" font-weight="700">MENTOR</text>
+</svg>

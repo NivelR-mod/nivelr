@@ -1,0 +1,1463 @@
+[
+  {
+    "id": "m001",
+    "title": "2 séances semaine",
+    "description": "Objectif: 2 séances semaine.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 0,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 2
+    }
+  },
+  {
+    "id": "m002",
+    "title": "15 km cumulés",
+    "description": "Objectif: 15 km cumulés.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 0,
+    "criterion": {
+      "kind": "RUN_DISTANCE_KM",
+      "target": 15
+    }
+  },
+  {
+    "id": "m003",
+    "title": "1 séance renforcement",
+    "description": "Objectif: 1 séance renforcement.",
+    "tier": "BRONZE",
+    "discipline": "RENFO",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 0,
+    "criterion": {
+      "kind": "RENFO_SESSIONS",
+      "target": 1
+    }
+  },
+  {
+    "id": "m004",
+    "title": "1 sortie 45 min",
+    "description": "Objectif: 1 sortie 45 min.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 0,
+    "criterion": {
+      "kind": "LONGEST_DURATION_MIN",
+      "target": 45
+    }
+  },
+  {
+    "id": "m005",
+    "title": "3 séances semaine",
+    "description": "Objectif: 3 séances semaine.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 1,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 3
+    }
+  },
+  {
+    "id": "m006",
+    "title": "5 km en une séance",
+    "description": "Objectif: 5 km en une séance.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 1,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 5
+    }
+  },
+  {
+    "id": "m007",
+    "title": "4 jours actifs",
+    "description": "Objectif: 4 jours actifs.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 2,
+    "criterion": {
+      "kind": "ACTIVE_DAYS_COUNT",
+      "target": 4
+    }
+  },
+  {
+    "id": "m008",
+    "title": "1 séance récupération",
+    "description": "Objectif: 1 séance récupération.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 2,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 1
+    }
+  },
+  {
+    "id": "m009",
+    "title": "20 km semaine",
+    "description": "Objectif: 20 km semaine.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 3,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 20
+    }
+  },
+  {
+    "id": "m010",
+    "title": "2 semaines actives",
+    "description": "Objectif: 2 semaines actives.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 3,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 2
+    }
+  },
+  {
+    "id": "m011",
+    "title": "1 séance intense (RPE >= 7)",
+    "description": "Objectif: 1 séance intense (RPE >= 7).",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 4,
+    "criterion": {
+      "kind": "HIGH_RPE_SESSIONS",
+      "target": 1,
+      "minRpe": 7
+    }
+  },
+  {
+    "id": "m012",
+    "title": "3 types entraînement différents",
+    "description": "Objectif: 3 types entraînement différents.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 4,
+    "criterion": {
+      "kind": "SUBTYPE_VARIETY",
+      "target": 3
+    }
+  },
+  {
+    "id": "m013",
+    "title": "8 km en une séance",
+    "description": "Objectif: 8 km en une séance.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 5,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 8
+    }
+  },
+  {
+    "id": "m014",
+    "title": "3 semaines actives",
+    "description": "Objectif: 3 semaines actives.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 6,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 3
+    }
+  },
+  {
+    "id": "m015",
+    "title": "1 sortie longue (60 min)",
+    "description": "Objectif: 1 sortie longue (60 min).",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 6,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 1
+    }
+  },
+  {
+    "id": "m016",
+    "title": "1 séance côtes",
+    "description": "Objectif: 1 séance côtes.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 7,
+    "criterion": {
+      "kind": "RUNNING_KEY_SESSIONS",
+      "target": 1,
+      "subtypes": [
+        "VMA"
+      ]
+    }
+  },
+  {
+    "id": "m017",
+    "title": "Respect plan 70% sur 3 semaines",
+    "description": "Objectif: Respect plan 70% sur 3 semaines.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 8,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 8,
+      "rollingWeeks": 3
+    }
+  },
+  {
+    "id": "m018",
+    "title": "25 km sur 2 semaines",
+    "description": "Objectif: 25 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 9,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 25,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m019",
+    "title": "1 fartlek",
+    "description": "Objectif: 1 fartlek.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 10,
+    "criterion": {
+      "kind": "RUNNING_KEY_SESSIONS",
+      "target": 1,
+      "subtypes": [
+        "VMA"
+      ]
+    }
+  },
+  {
+    "id": "m020",
+    "title": "1 séance mobilité",
+    "description": "Objectif: 1 séance mobilité.",
+    "tier": "BRONZE",
+    "discipline": "RENFO",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 11,
+    "criterion": {
+      "kind": "RENFO_SESSIONS",
+      "target": 1,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m021",
+    "title": "30 km sur 2 semaines",
+    "description": "Objectif: 30 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 12,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 30,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m022",
+    "title": "4 semaines actives",
+    "description": "Objectif: 4 semaines actives.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 13,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 4
+    }
+  },
+  {
+    "id": "m023",
+    "title": "Semaine équilibrée (3 types)",
+    "description": "Objectif: Semaine équilibrée (3 types).",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 14,
+    "criterion": {
+      "kind": "SUBTYPE_VARIETY",
+      "target": 3
+    }
+  },
+  {
+    "id": "m024",
+    "title": "6 séances sur 2 semaines",
+    "description": "Objectif: 6 séances sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 15,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 6,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m025",
+    "title": "10 km sur 3 jours",
+    "description": "Objectif: 10 km sur 3 jours.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 16,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_DAYS",
+      "target": 10,
+      "rollingDays": 3
+    }
+  },
+  {
+    "id": "m026",
+    "title": "2 renfo sur une semaine",
+    "description": "Objectif: 2 renfo sur une semaine.",
+    "tier": "BRONZE",
+    "discipline": "RENFO",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 17,
+    "criterion": {
+      "kind": "RENFO_SESSIONS",
+      "target": 2
+    }
+  },
+  {
+    "id": "m027",
+    "title": "2 séances intenses (RPE >= 7) sur 2 semaines",
+    "description": "Objectif: 2 séances intenses (RPE >= 7) sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 18,
+    "criterion": {
+      "kind": "HIGH_RPE_SESSIONS",
+      "target": 2,
+      "rollingWeeks": 2,
+      "minRpe": 7
+    }
+  },
+  {
+    "id": "m028",
+    "title": "+2 km sur sortie longue",
+    "description": "Objectif: +2 km sur sortie longue.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 19,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 2
+    }
+  },
+  {
+    "id": "m029",
+    "title": "5 séances sur 10 jours",
+    "description": "Objectif: 5 séances sur 10 jours.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 20,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_DAYS",
+      "target": 5,
+      "rollingDays": 10
+    }
+  },
+  {
+    "id": "m030",
+    "title": "35 km sur 2 semaines",
+    "description": "Objectif: 35 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 21,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 35,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m031",
+    "title": "RPE moyen ≤ 6 sur 3 sorties",
+    "description": "Objectif: RPE moyen ≤ 6 sur 3 sorties.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 22,
+    "criterion": {
+      "kind": "LOW_RPE_SESSIONS",
+      "target": 3,
+      "maxRpe": 6
+    }
+  },
+  {
+    "id": "m032",
+    "title": "4 séances planifiées réussies",
+    "description": "Objectif: 4 séances planifiées réussies.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 23,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 8,
+      "rollingWeeks": 4
+    }
+  },
+  {
+    "id": "m033",
+    "title": "40 km sur 2 semaines",
+    "description": "Objectif: 40 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 24,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 40,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m034",
+    "title": "1 mois avec 10 séances",
+    "description": "Objectif: 1 mois avec 10 séances.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 25,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 1,
+      "rollingWeeks": 4
+    }
+  },
+  {
+    "id": "m035",
+    "title": "45 km sur 2 semaines",
+    "description": "Objectif: 45 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 26,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 45,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m036",
+    "title": "5 semaines actives",
+    "description": "Objectif: 5 semaines actives.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 27,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 5
+    }
+  },
+  {
+    "id": "m037",
+    "title": "50 km sur 2 semaines",
+    "description": "Objectif: 50 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 28,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 50,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m038",
+    "title": "6 semaines actives",
+    "description": "Objectif: 6 semaines actives.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 29,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 6
+    }
+  },
+  {
+    "id": "m039",
+    "title": "55 km sur 2 semaines",
+    "description": "Objectif: 55 km sur 2 semaines.",
+    "tier": "BRONZE",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 40,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 55,
+      "rollingWeeks": 2
+    }
+  },
+  {
+    "id": "m040",
+    "title": "7 semaines actives",
+    "description": "Objectif: 7 semaines actives.",
+    "tier": "BRONZE",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 40,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 7
+    }
+  },
+  {
+    "id": "m041",
+    "title": "4 séances semaine",
+    "description": "Objectif: 4 séances semaine.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 5,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 4
+    }
+  },
+  {
+    "id": "m042",
+    "title": "40 km sur 4 semaines",
+    "description": "Objectif: 40 km sur 4 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 6,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 40,
+      "rollingWeeks": 4
+    }
+  },
+  {
+    "id": "m043",
+    "title": "6 semaines actives",
+    "description": "Objectif: 6 semaines actives.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 7,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 6
+    }
+  },
+  {
+    "id": "m044",
+    "title": "1 sortie 75 min",
+    "description": "Objectif: 1 sortie 75 min.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 8,
+    "criterion": {
+      "kind": "LONGEST_DURATION_MIN",
+      "target": 75
+    }
+  },
+  {
+    "id": "m045",
+    "title": "60 km sur 4 semaines",
+    "description": "Objectif: 60 km sur 4 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 9,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 60,
+      "rollingWeeks": 4
+    }
+  },
+  {
+    "id": "m046",
+    "title": "8 semaines actives",
+    "description": "Objectif: 8 semaines actives.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 10,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 8
+    }
+  },
+  {
+    "id": "m047",
+    "title": "+10% volume vs moyenne",
+    "description": "Objectif: +10% volume vs moyenne.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 11,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 10
+    }
+  },
+  {
+    "id": "m048",
+    "title": "10 km en une séance",
+    "description": "Objectif: 10 km en une séance.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 12,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 10
+    }
+  },
+  {
+    "id": "m049",
+    "title": "3 séances intenses (RPE >= 7) sur 3 semaines",
+    "description": "Objectif: 3 séances intenses (RPE >= 7) sur 3 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 13,
+    "criterion": {
+      "kind": "HIGH_RPE_SESSIONS",
+      "target": 3,
+      "rollingWeeks": 3,
+      "minRpe": 7
+    }
+  },
+  {
+    "id": "m050",
+    "title": "80 km sur 4 semaines",
+    "description": "Objectif: 80 km sur 4 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 14,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 80,
+      "rollingWeeks": 4
+    }
+  },
+  {
+    "id": "m051",
+    "title": "10 semaines actives",
+    "description": "Objectif: 10 semaines actives.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 15,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 10
+    }
+  },
+  {
+    "id": "m052",
+    "title": "1 course officielle",
+    "description": "Objectif: 1 course officielle.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 16,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 10
+    }
+  },
+  {
+    "id": "m053",
+    "title": "100 km sur 6 semaines",
+    "description": "Objectif: 100 km sur 6 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 17,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 100,
+      "rollingWeeks": 6
+    }
+  },
+  {
+    "id": "m054",
+    "title": "2 améliorations mesurées",
+    "description": "Objectif: 2 améliorations mesurées.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 18,
+    "criterion": {
+      "kind": "PROGRESSION_EVENTS_COUNT",
+      "target": 2,
+      "rollingWeeks": 8
+    }
+  },
+  {
+    "id": "m055",
+    "title": "12 km sortie contrôlée",
+    "description": "Objectif: 12 km sortie contrôlée.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 19,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 12
+    }
+  },
+  {
+    "id": "m056",
+    "title": "120 km sur 6 semaines",
+    "description": "Objectif: 120 km sur 6 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 20,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 120,
+      "rollingWeeks": 6
+    }
+  },
+  {
+    "id": "m057",
+    "title": "12 semaines actives",
+    "description": "Objectif: 12 semaines actives.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 21,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 12
+    }
+  },
+  {
+    "id": "m058",
+    "title": "140 km sur 8 semaines",
+    "description": "Objectif: 140 km sur 8 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 22,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 140,
+      "rollingWeeks": 8
+    }
+  },
+  {
+    "id": "m059",
+    "title": "2 courses sur la saison",
+    "description": "Objectif: 2 courses sur la saison.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 80,
+    "minLevel": 23,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 2,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m060",
+    "title": "4 améliorations sur saison",
+    "description": "Objectif: 4 améliorations sur saison.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 80,
+    "minLevel": 24,
+    "criterion": {
+      "kind": "PROGRESSION_EVENTS_COUNT",
+      "target": 4,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m061",
+    "title": "160 km sur 8 semaines",
+    "description": "Objectif: 160 km sur 8 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 25,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 160,
+      "rollingWeeks": 8
+    }
+  },
+  {
+    "id": "m062",
+    "title": "14 semaines actives",
+    "description": "Objectif: 14 semaines actives.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 26,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 14
+    }
+  },
+  {
+    "id": "m063",
+    "title": "180 km sur 10 semaines",
+    "description": "Objectif: 180 km sur 10 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 27,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 180,
+      "rollingWeeks": 10
+    }
+  },
+  {
+    "id": "m064",
+    "title": "5 types entraînement utilisés",
+    "description": "Objectif: 5 types entraînement utilisés.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 28,
+    "criterion": {
+      "kind": "SUBTYPE_VARIETY",
+      "target": 5
+    }
+  },
+  {
+    "id": "m065",
+    "title": "16 semaines actives",
+    "description": "Objectif: 16 semaines actives.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 29,
+    "criterion": {
+      "kind": "ACTIVE_WEEKS",
+      "target": 16
+    }
+  },
+  {
+    "id": "m066",
+    "title": "200 km sur 12 semaines",
+    "description": "Objectif: 200 km sur 12 semaines.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 80,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 200,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m067",
+    "title": "Bloc tempo réussi",
+    "description": "Objectif: Bloc tempo réussi.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "RUNNING_KEY_SESSIONS",
+      "target": 1
+    }
+  },
+  {
+    "id": "m068",
+    "title": "15 km sortie contrôlée",
+    "description": "Objectif: 15 km sortie contrôlée.",
+    "tier": "SILVER",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 80,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 15
+    }
+  },
+  {
+    "id": "m069",
+    "title": "6 semaines équilibrées",
+    "description": "Objectif: 6 semaines équilibrées.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "WEEKLY",
+    "xpReward": 80,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "SESSIONS_COUNT",
+      "target": 6
+    }
+  },
+  {
+    "id": "m070",
+    "title": "90% plan respecté saison",
+    "description": "Objectif: 90% plan respecté saison.",
+    "tier": "SILVER",
+    "discipline": "MIX",
+    "window": "SEASON",
+    "xpReward": 80,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 24,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m071",
+    "title": "40 km semaine",
+    "description": "Objectif: 40 km semaine.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 10,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 40
+    }
+  },
+  {
+    "id": "m072",
+    "title": "100 km sur 4 semaines",
+    "description": "Objectif: 100 km sur 4 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 12,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 100,
+      "rollingWeeks": 4
+    }
+  },
+  {
+    "id": "m073",
+    "title": "45 km semaine",
+    "description": "Objectif: 45 km semaine.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 14,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 45
+    }
+  },
+  {
+    "id": "m074",
+    "title": "2 sorties 90 min",
+    "description": "Objectif: 2 sorties 90 min.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 15,
+    "criterion": {
+      "kind": "RUNNING_KEY_SESSIONS",
+      "target": 2,
+      "rollingWeeks": 3,
+      "subtypes": [
+        "SORTIE_LONGUE"
+      ]
+    }
+  },
+  {
+    "id": "m075",
+    "title": "150 km sur 6 semaines",
+    "description": "Objectif: 150 km sur 6 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 16,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 150,
+      "rollingWeeks": 6
+    }
+  },
+  {
+    "id": "m076",
+    "title": "5 séances fractionné sur 6 semaines",
+    "description": "Objectif: 5 séances fractionné sur 6 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 17,
+    "criterion": {
+      "kind": "RUNNING_KEY_SESSIONS",
+      "target": 5,
+      "rollingWeeks": 6
+    }
+  },
+  {
+    "id": "m077",
+    "title": "50 km semaine contrôlée",
+    "description": "Objectif: 50 km semaine contrôlée.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 18,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 50
+    }
+  },
+  {
+    "id": "m078",
+    "title": "200 km sur 8 semaines",
+    "description": "Objectif: 200 km sur 8 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 19,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 200,
+      "rollingWeeks": 8
+    }
+  },
+  {
+    "id": "m079",
+    "title": "10 km amélioration significative",
+    "description": "Objectif: 10 km amélioration significative.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 20,
+    "criterion": {
+      "kind": "PROGRESSION_EVENTS_COUNT",
+      "target": 10,
+      "rollingWeeks": 8
+    }
+  },
+  {
+    "id": "m080",
+    "title": "55 km semaine",
+    "description": "Objectif: 55 km semaine.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 21,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 55
+    }
+  },
+  {
+    "id": "m081",
+    "title": "250 km sur 10 semaines",
+    "description": "Objectif: 250 km sur 10 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 22,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 250,
+      "rollingWeeks": 10
+    }
+  },
+  {
+    "id": "m082",
+    "title": "Semi amélioré",
+    "description": "Objectif: Semi amélioré.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 140,
+    "minLevel": 23,
+    "criterion": {
+      "kind": "PROGRESSION_EVENTS_COUNT",
+      "target": 1,
+      "rollingWeeks": 8
+    }
+  },
+  {
+    "id": "m083",
+    "title": "60 km semaine",
+    "description": "Objectif: 60 km semaine.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 24,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 60
+    }
+  },
+  {
+    "id": "m084",
+    "title": "300 km sur 12 semaines",
+    "description": "Objectif: 300 km sur 12 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 140,
+    "minLevel": 25,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 300,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m085",
+    "title": "3 courses saison",
+    "description": "Objectif: 3 courses saison.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 140,
+    "minLevel": 26,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 3,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m086",
+    "title": "65 km semaine",
+    "description": "Objectif: 65 km semaine.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 27,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 65
+    }
+  },
+  {
+    "id": "m087",
+    "title": "350 km sur 14 semaines",
+    "description": "Objectif: 350 km sur 14 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 140,
+    "minLevel": 28,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 350,
+      "rollingWeeks": 14
+    }
+  },
+  {
+    "id": "m088",
+    "title": "70 km semaine",
+    "description": "Objectif: 70 km semaine.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 29,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 70
+    }
+  },
+  {
+    "id": "m089",
+    "title": "400 km sur 16 semaines",
+    "description": "Objectif: 400 km sur 16 semaines.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 140,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 400,
+      "rollingWeeks": 16
+    }
+  },
+  {
+    "id": "m090",
+    "title": "75 km semaine contrôlée",
+    "description": "Objectif: 75 km semaine contrôlée.",
+    "tier": "GOLD",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 140,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 75
+    }
+  },
+  {
+    "id": "m091",
+    "title": "200 km saison",
+    "description": "Objectif: 200 km saison.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 20,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 200,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m092",
+    "title": "50 km semaine contrôlée",
+    "description": "Objectif: 50 km semaine contrôlée.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 220,
+    "minLevel": 22,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 50
+    }
+  },
+  {
+    "id": "m093",
+    "title": "20 km sortie contrôlée",
+    "description": "Objectif: 20 km sortie contrôlée.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "ONE_SHOT",
+    "xpReward": 220,
+    "minLevel": 23,
+    "criterion": {
+      "kind": "LONGEST_DISTANCE_KM",
+      "target": 20
+    }
+  },
+  {
+    "id": "m094",
+    "title": "300 km saison",
+    "description": "Objectif: 300 km saison.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 24,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 300,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m095",
+    "title": "4 améliorations majeures saison",
+    "description": "Objectif: 4 améliorations majeures saison.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 25,
+    "criterion": {
+      "kind": "PROGRESSION_EVENTS_COUNT",
+      "target": 4,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m096",
+    "title": "3 courses officielles saison",
+    "description": "Objectif: 3 courses officielles saison.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 26,
+    "criterion": {
+      "kind": "SESSIONS_IN_ROLLING_WEEKS",
+      "target": 3,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m097",
+    "title": "400 km saison",
+    "description": "Objectif: 400 km saison.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 27,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 400,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m098",
+    "title": "60 km semaine contrôlée",
+    "description": "Objectif: 60 km semaine contrôlée.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "WEEKLY",
+    "xpReward": 220,
+    "minLevel": 28,
+    "criterion": {
+      "kind": "WEEKLY_DISTANCE_KM",
+      "target": 60
+    }
+  },
+  {
+    "id": "m099",
+    "title": "500 km saison",
+    "description": "Objectif: 500 km saison.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 29,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 500,
+      "rollingWeeks": 12
+    }
+  },
+  {
+    "id": "m100",
+    "title": "Objectif saison ambitieux atteint",
+    "description": "Objectif: Objectif saison ambitieux atteint.",
+    "tier": "PLATINUM",
+    "discipline": "RUN",
+    "window": "SEASON",
+    "xpReward": 220,
+    "minLevel": 30,
+    "criterion": {
+      "kind": "RUN_DISTANCE_IN_ROLLING_WEEKS",
+      "target": 550,
+      "rollingWeeks": 12
+    }
+  }
+]

@@ -1,0 +1,15 @@
+<svg width="420" height="220" viewBox="0 0 420 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d">
+  <title id="t">Style Stratège</title>
+  <desc id="d">Illustration abstraite du style Stratège.</desc>
+  <rect width="420" height="220" rx="22" fill="#172231"/>
+  <g opacity="0.9">
+    <rect x="34" y="56" width="102" height="28" rx="8" fill="#2cc4b8"/>
+    <rect x="148" y="56" width="102" height="28" rx="8" fill="#239cae"/>
+    <rect x="262" y="56" width="126" height="28" rx="8" fill="#1f7b9f"/>
+    <rect x="34" y="96" width="182" height="28" rx="8" fill="#2aa8c1"/>
+    <rect x="228" y="96" width="160" height="28" rx="8" fill="#2b8cb8"/>
+    <rect x="34" y="136" width="86" height="28" rx="8" fill="#58d4ca"/>
+    <rect x="132" y="136" width="256" height="28" rx="8" fill="#2f9ea8"/>
+  </g>
+  <text x="24" y="34" fill="#e7f4ff" font-size="20" font-family="Manrope, sans-serif" font-weight="700">STRATEGE</text>
+</svg>
