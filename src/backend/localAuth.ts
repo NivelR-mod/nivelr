@@ -1,4 +1,4 @@
-import { AuthSessionUser, ContactRequest, UserSubscriptionInfo } from './types';
+import { AuthSessionUser, ContactRequest, TeamInvite, UserSubscriptionInfo } from './types';
 
 interface StoredUser extends AuthSessionUser {
   password: string;
@@ -8,6 +8,7 @@ interface StoredUser extends AuthSessionUser {
 const USERS_KEY = 'nivelr_local_users_v1';
 const SESSION_KEY = 'nivelr_local_session_v1';
 const CONTACTS_KEY = 'nivelr_local_contacts_v1';
+const TEAM_INVITES_KEY = 'nivelr_local_team_invites_v1';
 const SUBSCRIPTIONS_KEY = 'nivelr_local_subscriptions_v1';
 const MODO_KEY = 'nivelr_modo_enabled';
 const AUTH_CHANGED_EVENT = 'nivelr-auth-changed';
@@ -370,6 +371,12 @@ export function purgeFakeUsersLocal(): { ok: boolean; removed: number; error?: s
   );
   writeJson(CONTACTS_KEY, keptContacts);
 
+  const teamInvites = readJson<TeamInvite[]>(TEAM_INVITES_KEY, []);
+  const keptTeamInvites = teamInvites.filter(
+    (item) => !fakeIds.has(item.inviterUserId) && !fakeIds.has(item.invitedUserId)
+  );
+  writeJson(TEAM_INVITES_KEY, keptTeamInvites);
+
   const subscriptions = readSubscriptions();
   const nextSubscriptions = { ...subscriptions };
   for (const fakeId of fakeIds) {
@@ -542,5 +549,87 @@ export function respondToContactRequestLocal(
   });
   if (!changed) return { ok: false, error: 'Demande introuvable.' };
   saveContactsInternal(next);
+  return { ok: true };
+}
+
+function listTeamInvitesInternal(): TeamInvite[] {
+  return readJson<TeamInvite[]>(TEAM_INVITES_KEY, []);
+}
+
+function saveTeamInvitesInternal(next: TeamInvite[]): void {
+  writeJson(TEAM_INVITES_KEY, next);
+}
+
+export function listTeamInvitesForUser(userId: string): {
+  incoming: TeamInvite[];
+  outgoing: TeamInvite[];
+} {
+  const all = listTeamInvitesInternal();
+  return {
+    incoming: all.filter((item) => item.invitedUserId === userId),
+    outgoing: all.filter((item) => item.inviterUserId === userId)
+  };
+}
+
+export function sendTeamInviteLocal(input: {
+  seasonId: string;
+  teamId: string;
+  teamName: string;
+  inviteCode: string;
+  inviterUserId: string;
+  invitedUserId: string;
+}): { ok: boolean; error?: string } {
+  if (!input.inviterUserId || !input.invitedUserId || input.inviterUserId === input.invitedUserId) {
+    return { ok: false, error: 'Invitation invalide.' };
+  }
+  const all = listTeamInvitesInternal();
+  const hasPending = all.some(
+    (item) =>
+      item.seasonId === input.seasonId &&
+      item.teamId === input.teamId &&
+      item.inviterUserId === input.inviterUserId &&
+      item.invitedUserId === input.invitedUserId &&
+      item.status === 'PENDING'
+  );
+  if (hasPending) return { ok: false, error: 'Invitation déjà envoyée.' };
+  const now = new Date().toISOString();
+  const next: TeamInvite[] = [
+    {
+      id: `ti_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      seasonId: input.seasonId,
+      teamId: input.teamId,
+      teamName: input.teamName,
+      inviteCode: input.inviteCode,
+      inviterUserId: input.inviterUserId,
+      invitedUserId: input.invitedUserId,
+      status: 'PENDING',
+      createdAt: now,
+      updatedAt: now
+    },
+    ...all
+  ];
+  saveTeamInvitesInternal(next);
+  return { ok: true };
+}
+
+export function respondTeamInviteLocal(
+  inviteId: string,
+  invitedUserId: string,
+  decision: 'ACCEPTED' | 'DECLINED'
+): { ok: boolean; error?: string } {
+  const all = listTeamInvitesInternal();
+  let changed = false;
+  const next = all.map((item) => {
+    if (item.id !== inviteId) return item;
+    if (item.invitedUserId !== invitedUserId) return item;
+    changed = true;
+    return {
+      ...item,
+      status: decision,
+      updatedAt: new Date().toISOString()
+    };
+  });
+  if (!changed) return { ok: false, error: 'Invitation introuvable.' };
+  saveTeamInvitesInternal(next);
   return { ok: true };
 }

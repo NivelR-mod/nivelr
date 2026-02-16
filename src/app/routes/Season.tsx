@@ -1,6 +1,14 @@
 import { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { getAscensionTeamOverview } from '../../gamification/ascension';
 import { AscensionRole, AscensionStatKey, GamificationState } from '../../gamification/types';
+import {
+  getCurrentSessionUser,
+  listContactRequestsForUser,
+  listLocalUsers,
+  listTeamInvitesForUser,
+  respondTeamInviteLocal,
+  sendTeamInviteLocal
+} from '../../backend/localAuth';
 import seasonAmbiance from '../../assets/season-ambiance.jpg';
 
 interface SeasonProps {
@@ -136,9 +144,38 @@ export default function Season({
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
   const [showCountdownModal, setShowCountdownModal] = useState<boolean>(true);
+  const [socialMessage, setSocialMessage] = useState('');
+  const [socialError, setSocialError] = useState('');
+  const [socialRefreshTick, setSocialRefreshTick] = useState(0);
   const [draftStats, setDraftStats] = useState<Record<AscensionStatKey, number>>(
     myBuild?.stats ?? { ENDURANCE: 0, INTENSITE: 0, REGULARITE: 0, MAITRISE: 0, EXPLORATION: 0 }
   );
+  const session = getCurrentSessionUser();
+  const usersCatalog = useMemo(() => listLocalUsers(), [socialRefreshTick]);
+  const userIdentityById = useMemo(
+    () =>
+      new Map(
+        usersCatalog.map((user) => [
+          user.id,
+          { displayName: user.displayName, handle: user.handle }
+        ])
+      ),
+    [usersCatalog]
+  );
+  const contacts = session ? listContactRequestsForUser(session.id) : { incoming: [], outgoing: [] };
+  const friends = useMemo(() => {
+    if (!session) return [] as string[];
+    const accepted = [...contacts.incoming, ...contacts.outgoing].filter((item) => item.status === 'ACCEPTED');
+    const ids = new Set<string>();
+    for (const item of accepted) {
+      if (item.requesterUserId === session.id) ids.add(item.targetUserId);
+      if (item.targetUserId === session.id) ids.add(item.requesterUserId);
+    }
+    return Array.from(ids);
+  }, [contacts.incoming, contacts.outgoing, session]);
+  const teamInvites = session
+    ? listTeamInvitesForUser(session.id)
+    : { incoming: [], outgoing: [] };
 
   useEffect(() => {
     const id = window.setInterval(() => setNowTs(Date.now()), 1000);
@@ -195,6 +232,76 @@ export default function Season({
   const teamChangeLocked = !seasonNotStarted;
   const hasTeam = Boolean(teamOverview.team);
   const hasRole = Boolean(myBuild?.role);
+  const formatUserIdentity = (userId: string): string => {
+    const user = userIdentityById.get(userId);
+    if (!user) return 'Utilisateur inconnu';
+    return `${user.displayName} (@${user.handle})`;
+  };
+  const outgoingPendingByInvitedUserId = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const invite of teamInvites.outgoing) {
+      if (
+        invite.status === 'PENDING' &&
+        invite.seasonId === gamificationState.ascension.currentSeasonId &&
+        (!teamOverview.team || invite.teamId === teamOverview.team.id)
+      ) {
+        map.set(invite.invitedUserId, true);
+      }
+    }
+    return map;
+  }, [
+    teamInvites.outgoing,
+    gamificationState.ascension.currentSeasonId,
+    teamOverview.team
+  ]);
+  const activeMemberNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const member of teamOverview.members) {
+      names.add(member.name.trim().toLowerCase());
+    }
+    return names;
+  }, [teamOverview.members]);
+  const onInviteFriend = (friendUserId: string): void => {
+    if (!session || !teamOverview.team) return;
+    const invite = sendTeamInviteLocal({
+      seasonId: gamificationState.ascension.currentSeasonId,
+      teamId: teamOverview.team.id,
+      teamName: teamOverview.team.name,
+      inviteCode: teamOverview.team.inviteCode,
+      inviterUserId: session.id,
+      invitedUserId: friendUserId
+    });
+    if (!invite.ok) {
+      setSocialError(invite.error ?? 'Invitation impossible.');
+      return;
+    }
+    setSocialError('');
+    setSocialMessage('Invitation équipe envoyée.');
+    setSocialRefreshTick((value) => value + 1);
+  };
+  const onAcceptTeamInvite = (inviteId: string, inviteCode: string): void => {
+    if (!session) return;
+    onJoinByCode(inviteCode);
+    const result = respondTeamInviteLocal(inviteId, session.id, 'ACCEPTED');
+    if (!result.ok) {
+      setSocialError(result.error ?? 'Validation invitation impossible.');
+      return;
+    }
+    setSocialError('');
+    setSocialMessage('Invitation acceptée.');
+    setSocialRefreshTick((value) => value + 1);
+  };
+  const onDeclineTeamInvite = (inviteId: string): void => {
+    if (!session) return;
+    const result = respondTeamInviteLocal(inviteId, session.id, 'DECLINED');
+    if (!result.ok) {
+      setSocialError(result.error ?? 'Refus invitation impossible.');
+      return;
+    }
+    setSocialError('');
+    setSocialMessage('Invitation refusée.');
+    setSocialRefreshTick((value) => value + 1);
+  };
   const endDateLabel = season
     ? new Date(season.endDate).toLocaleDateString('fr-FR', {
         day: 'numeric',
@@ -417,6 +524,45 @@ export default function Season({
                 Quitter l&apos;équipe
               </button>
             </div>
+            <article className="season-friends-invite">
+              <h3>Inviter un ami</h3>
+              {friends.length === 0 ? (
+                <p>Ajoute d&apos;abord des amis dans la page Communauté.</p>
+              ) : (
+                <div className="season-friends-list">
+                  {friends.map((friendId) => (
+                    <div key={friendId} className="season-friend-row">
+                      <span>{formatUserIdentity(friendId)}</span>
+                      <div className="season-friend-actions">
+                        {activeMemberNames.has(
+                          (userIdentityById.get(friendId)?.displayName ?? '').trim().toLowerCase()
+                        ) ? (
+                          <small className="season-friend-badge is-member">Déjà dans ton équipe</small>
+                        ) : null}
+                        {outgoingPendingByInvitedUserId.get(friendId) ? (
+                          <small className="season-friend-badge">Invitation envoyée</small>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={
+                            teamChangeLocked ||
+                            activeMemberNames.has(
+                              (userIdentityById.get(friendId)?.displayName ?? '').trim().toLowerCase()
+                            ) ||
+                            Boolean(outgoingPendingByInvitedUserId.get(friendId))
+                          }
+                          onClick={() => onInviteFriend(friendId)}
+                        >
+                          Inviter
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {socialError ? <p className="error">{socialError}</p> : null}
+              {socialMessage ? <p className="inline-info">{socialMessage}</p> : null}
+            </article>
             {teamChangeLocked ? (
               <p className="season-team-lock">
                 La saison a démarré: la composition d&apos;équipe est maintenant verrouillée.
@@ -445,6 +591,34 @@ export default function Season({
                 </button>
               </div>
             </div>
+            <article className="season-friends-invite">
+              <h3>Invitations d&apos;équipe reçues</h3>
+              {teamInvites.incoming.filter((invite) => invite.status === 'PENDING').length === 0 ? (
+                <p>Aucune invitation en attente.</p>
+              ) : (
+                <div className="season-friends-list">
+                  {teamInvites.incoming
+                    .filter((invite) => invite.status === 'PENDING')
+                    .map((invite) => (
+                      <div key={invite.id} className="season-friend-row">
+                        <span>
+                          {invite.teamName} · par {formatUserIdentity(invite.inviterUserId)}
+                        </span>
+                        <div className="goal-actions">
+                          <button type="button" disabled={teamChangeLocked} onClick={() => onAcceptTeamInvite(invite.id, invite.inviteCode)}>
+                            Rejoindre
+                          </button>
+                          <button type="button" disabled={teamChangeLocked} onClick={() => onDeclineTeamInvite(invite.id)}>
+                            Refuser
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {socialError ? <p className="error">{socialError}</p> : null}
+              {socialMessage ? <p className="inline-info">{socialMessage}</p> : null}
+            </article>
             {teamChangeLocked ? (
               <p className="season-team-lock">
                 La saison a démarré: création et changement d&apos;équipe sont verrouillés.

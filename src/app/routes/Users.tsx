@@ -4,6 +4,7 @@ import {
   createFakeUsersLocal,
   getCurrentSessionUser,
   isFakeCommunityUser,
+  listLocalUsers,
   listFakeUsersLocal,
   listContactRequestsForUser,
   purgeFakeUsersLocal,
@@ -22,12 +23,45 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [refreshTick, setRefreshTick] = useState(0);
+  const usersCatalog = useMemo(() => listLocalUsers(), [refreshTick]);
+  const userById = useMemo(
+    () =>
+      new Map(
+        usersCatalog.map((user) => [
+          user.id,
+          {
+            displayName: user.displayName,
+            handle: user.handle
+          }
+        ])
+      ),
+    [usersCatalog]
+  );
   const results = useMemo(
     () => searchUsersLocal(query, session?.id, { includeFakeUsers: isModoEnabled }),
     [query, session?.id, isModoEnabled, refreshTick]
   );
   const fakeUsers = useMemo(() => (isModoEnabled ? listFakeUsersLocal() : []), [isModoEnabled, refreshTick]);
   const contacts = session ? listContactRequestsForUser(session.id) : { incoming: [], outgoing: [] };
+  const friends = useMemo(() => {
+    if (!session) return [];
+    const accepted = [...contacts.incoming, ...contacts.outgoing].filter((item) => item.status === 'ACCEPTED');
+    const friendIds = new Set<string>();
+    for (const item of accepted) {
+      if (item.requesterUserId === session.id) {
+        friendIds.add(item.targetUserId);
+      } else if (item.targetUserId === session.id) {
+        friendIds.add(item.requesterUserId);
+      }
+    }
+    return Array.from(friendIds);
+  }, [contacts.incoming, contacts.outgoing, session]);
+
+  const formatUserIdentity = (userId: string): string => {
+    const identity = userById.get(userId);
+    if (!identity) return 'Utilisateur inconnu';
+    return `${identity.displayName} (@${identity.handle})`;
+  };
 
   const onSendRequest = (targetUserId: string): void => {
     if (!session) {
@@ -40,7 +74,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
       return;
     }
     setError('');
-    setMessage('Demande envoyée.');
+    setMessage("Demande d'ami envoyée.");
   };
 
   const onRespond = (requestId: string, decision: 'ACCEPTED' | 'DECLINED'): void => {
@@ -51,7 +85,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
       return;
     }
     setError('');
-    setMessage(decision === 'ACCEPTED' ? 'Demande acceptée.' : 'Demande refusée.');
+    setMessage(decision === 'ACCEPTED' ? "Demande d'ami acceptée." : "Demande d'ami refusée.");
   };
 
   const onCreateFakeUsers = (): void => {
@@ -80,7 +114,8 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
     <section className="page">
       <h1>Utilisateurs</h1>
       <p className="page-subtitle">
-        Recherche et contact pour la coopération saison. Social actif: <strong>{String(BACKEND_FLAGS.socialEnabled)}</strong>
+        Ajoute des amis pour simplifier tes futures invitations d'équipe saison. Social actif:{' '}
+        <strong>{String(BACKEND_FLAGS.socialEnabled)}</strong>
       </p>
 
       <article className="card premium-section form auth-form">
@@ -126,9 +161,8 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                 <strong>{user.displayName}</strong> @{user.handle}{' '}
                 {isModoEnabled && isFakeCommunityUser(user) ? <small className="nav-lock">Fictif</small> : null}
               </p>
-              <p>{user.email}</p>
               <button type="button" onClick={() => onSendRequest(user.id)}>
-                Demander le contact
+                Ajouter en ami
               </button>
             </article>
           ))}
@@ -138,7 +172,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
       {session ? (
         <div className="list">
           <article className="card premium-section">
-            <h2>Demandes reçues</h2>
+            <h2>Demandes d'ami reçues</h2>
             {contacts.incoming.filter((item) => item.status === 'PENDING').length === 0 ? (
               <p>Aucune demande en attente.</p>
             ) : null}
@@ -146,7 +180,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
               .filter((item) => item.status === 'PENDING')
               .map((item) => (
                 <div key={item.id} className="goal-actions">
-                  <span>{item.requesterUserId}</span>
+                  <span>{formatUserIdentity(item.requesterUserId)}</span>
                   <button type="button" onClick={() => onRespond(item.id, 'ACCEPTED')}>
                     Accepter
                   </button>
@@ -158,12 +192,20 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
           </article>
 
           <article className="card premium-section">
-            <h2>Demandes envoyées</h2>
+            <h2>Demandes d'ami envoyées</h2>
             {contacts.outgoing.length === 0 ? <p>Aucune demande envoyée.</p> : null}
             {contacts.outgoing.map((item) => (
               <p key={item.id}>
-                {item.targetUserId} · <strong>{item.status}</strong>
+                {formatUserIdentity(item.targetUserId)} · <strong>{item.status}</strong>
               </p>
+            ))}
+          </article>
+
+          <article className="card premium-section">
+            <h2>Mes amis</h2>
+            {friends.length === 0 ? <p>Aucun ami pour le moment.</p> : null}
+            {friends.map((friendId) => (
+              <p key={friendId}>{formatUserIdentity(friendId)}</p>
             ))}
           </article>
         </div>

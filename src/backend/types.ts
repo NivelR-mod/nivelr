@@ -22,3 +22,16 @@ export interface ContactRequest {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface TeamInvite {
+  id: string;
+  seasonId: string;
+  teamId: string;
+  teamName: string;
+  inviteCode: string;
+  inviterUserId: string;
+  invitedUserId: string;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  createdAt: string;
+  updatedAt: string;
+}
