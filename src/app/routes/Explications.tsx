@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import heroNivelr from '../../assets/hero-nivelr.jpg';
 
+interface ExplicationsProps {
+  isAuthenticated: boolean;
+}
+
 const ROLE_CARDS = [
   {
     title: 'Explorateur',
@@ -131,7 +135,7 @@ function StepIcon({ kind }: { kind: 'SESSION' | 'MISSION' | 'LEVEL' }): JSX.Elem
   );
 }
 
-export default function Explications(): JSX.Element {
+export default function Explications({ isAuthenticated }: ExplicationsProps): JSX.Element {
   return (
     <section className="page explications-page">
       <header className="card premium-section explications-hero">
@@ -151,11 +155,17 @@ export default function Explications(): JSX.Element {
           <p>
             Chaque séance compte. L&apos;objectif: te faire revenir semaine après semaine.
           </p>
-          <div className="explications-hero-actions">
-            <Link to="/add-session">Ajouter ma séance</Link>
-            <Link to="/missions">Voir mes missions</Link>
-            <Link to="/guide-xp">Comprendre l&apos;XP</Link>
-          </div>
+          {isAuthenticated ? (
+            <div className="explications-hero-actions">
+              <Link to="/add-session">Ajouter ma séance</Link>
+              <Link to="/missions">Voir mes missions</Link>
+              <Link to="/guide-xp">Comprendre l&apos;XP</Link>
+            </div>
+          ) : (
+            <div className="explications-hero-actions">
+              <Link to="/connexion">Login</Link>
+            </div>
+          )}
         </div>
       </header>
 

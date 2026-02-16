@@ -1089,7 +1089,7 @@ function App(): JSX.Element {
                   )
                 }
               />
-              <Route path="/explications" element={<Explications />} />
+              <Route path="/explications" element={<Explications isAuthenticated={Boolean(sessionUser)} />} />
             </Routes>
           </main>
         </div>
