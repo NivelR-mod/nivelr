@@ -1,19 +1,32 @@
 import { useMemo, useState } from 'react';
 import { BACKEND_FLAGS } from '../../backend/config';
 import {
+  createFakeUsersLocal,
   getCurrentSessionUser,
+  isFakeCommunityUser,
+  listFakeUsersLocal,
   listContactRequestsForUser,
+  purgeFakeUsersLocal,
   respondToContactRequestLocal,
   searchUsersLocal,
   sendContactRequestLocal
 } from '../../backend/localAuth';
 
-export default function Users(): JSX.Element {
+interface UsersProps {
+  isModoEnabled: boolean;
+}
+
+export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
   const session = getCurrentSessionUser();
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const results = useMemo(() => searchUsersLocal(query, session?.id), [query, session?.id]);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const results = useMemo(
+    () => searchUsersLocal(query, session?.id, { includeFakeUsers: isModoEnabled }),
+    [query, session?.id, isModoEnabled, refreshTick]
+  );
+  const fakeUsers = useMemo(() => (isModoEnabled ? listFakeUsersLocal() : []), [isModoEnabled, refreshTick]);
   const contacts = session ? listContactRequestsForUser(session.id) : { incoming: [], outgoing: [] };
 
   const onSendRequest = (targetUserId: string): void => {
@@ -41,6 +54,28 @@ export default function Users(): JSX.Element {
     setMessage(decision === 'ACCEPTED' ? 'Demande acceptée.' : 'Demande refusée.');
   };
 
+  const onCreateFakeUsers = (): void => {
+    const result = createFakeUsersLocal(12);
+    if (!result.ok) {
+      setError(result.error ?? 'Création impossible.');
+      return;
+    }
+    setError('');
+    setMessage(`${result.created} utilisateurs fictifs créés.`);
+    setRefreshTick((value) => value + 1);
+  };
+
+  const onPurgeFakeUsers = (): void => {
+    const result = purgeFakeUsersLocal();
+    if (!result.ok) {
+      setError(result.error ?? 'Suppression impossible.');
+      return;
+    }
+    setError('');
+    setMessage(`${result.removed} utilisateurs fictifs supprimés.`);
+    setRefreshTick((value) => value + 1);
+  };
+
   return (
     <section className="page">
       <h1>Utilisateurs</h1>
@@ -61,6 +96,26 @@ export default function Users(): JSX.Element {
         {message ? <p className="inline-info">{message}</p> : null}
       </article>
 
+      {isModoEnabled ? (
+        <article className="card premium-section">
+          <h2>Mode modérateur · données de test</h2>
+          <p className="page-subtitle">
+            Les profils fictifs sont visibles uniquement en mode modérateur pour tester la communauté.
+          </p>
+          <div className="goal-actions">
+            <button type="button" onClick={onCreateFakeUsers}>
+              Générer 12 utilisateurs fictifs
+            </button>
+            <button type="button" className="danger" onClick={onPurgeFakeUsers}>
+              Supprimer tous les fictifs
+            </button>
+          </div>
+          <p>
+            Fictifs disponibles: <strong>{fakeUsers.length}</strong>
+          </p>
+        </article>
+      ) : null}
+
       <article className="card premium-section">
         <h2>Résultats</h2>
         {results.length === 0 ? <p>Aucun résultat.</p> : null}
@@ -68,7 +123,8 @@ export default function Users(): JSX.Element {
           {results.map((user) => (
             <article key={user.id} className="card">
               <p>
-                <strong>{user.displayName}</strong> @{user.handle}
+                <strong>{user.displayName}</strong> @{user.handle}{' '}
+                {isModoEnabled && isFakeCommunityUser(user) ? <small className="nav-lock">Fictif</small> : null}
               </p>
               <p>{user.email}</p>
               <button type="button" onClick={() => onSendRequest(user.id)}>

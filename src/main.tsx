@@ -799,7 +799,6 @@ function App(): JSX.Element {
               </button>
               <NavLink to="/explications">Accueil</NavLink>
               {sessionUser ? <NavLink to="/utilisateurs">Communauté</NavLink> : null}
-              {modoEnabled ? <NavLink to="/abonnement">Abonnement</NavLink> : null}
               {sessionUser ? (
                 <>
                   <NavLink to="/profil" className="topbar-profile-link">
@@ -958,7 +957,7 @@ function App(): JSX.Element {
                 path="/utilisateurs"
                 element={
                   sessionUser ? (
-                    <Users />
+                    <Users isModoEnabled={modoEnabled} />
                   ) : (
                     renderAuthLockedPage(
                       'Communauté',

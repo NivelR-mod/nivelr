@@ -11,6 +11,8 @@ const CONTACTS_KEY = 'nivelr_local_contacts_v1';
 const SUBSCRIPTIONS_KEY = 'nivelr_local_subscriptions_v1';
 const MODO_KEY = 'nivelr_modo_enabled';
 const AUTH_CHANGED_EVENT = 'nivelr-auth-changed';
+const FAKE_USER_ID_PREFIX = 'fake_';
+const FAKE_USER_EMAIL_DOMAIN = '@sim.nivelr.local';
 const RESERVED_STAFF_TERMS = [
   'nivelr',
   'modo',
@@ -175,8 +177,22 @@ function toPublicUser(user: StoredUser): AuthSessionUser {
   };
 }
 
+function isFakeUserRecord(user: Pick<StoredUser, 'id' | 'email'>): boolean {
+  return user.id.startsWith(FAKE_USER_ID_PREFIX) || user.email.endsWith(FAKE_USER_EMAIL_DOMAIN);
+}
+
+export function isFakeCommunityUser(user: AuthSessionUser): boolean {
+  return isFakeUserRecord(user);
+}
+
 export function listLocalUsers(): AuthSessionUser[] {
   return readJson<StoredUser[]>(USERS_KEY, []).map(toPublicUser);
+}
+
+export function listFakeUsersLocal(): AuthSessionUser[] {
+  return readJson<StoredUser[]>(USERS_KEY, [])
+    .filter((user) => isFakeUserRecord(user))
+    .map(toPublicUser);
 }
 
 export function getCurrentSessionUser(): AuthSessionUser | null {
@@ -278,6 +294,98 @@ export function updateProfileLocal(userId: string, patch: { displayName: string 
   return { user: publicUser };
 }
 
+export function createFakeUsersLocal(count = 10): { ok: boolean; created: number; error?: string } {
+  if (!isModoEnabledLocal()) {
+    return { ok: false, created: 0, error: 'Mode modérateur requis.' };
+  }
+  const users = readJson<StoredUser[]>(USERS_KEY, []);
+  const subscriptions = readSubscriptions();
+  const fakeNames = [
+    'Alex Sprint',
+    'Maya Trail',
+    'Noah Tempo',
+    'Lina Summit',
+    'Hugo Long Run',
+    'Emma Cardio',
+    'Leo Pace',
+    'Nina Endurance',
+    'Tom Relay',
+    'Sara Fartlek',
+    'Paul Horizon',
+    'Ines Stride'
+  ];
+
+  let created = 0;
+  const nextUsers = [...users];
+  const targetCount = Math.max(1, Math.min(40, Math.floor(count)));
+
+  for (let i = 0; i < targetCount; i += 1) {
+    const baseName = fakeNames[i % fakeNames.length];
+    let displayName = baseName;
+    let suffix = 1;
+    while (
+      nextUsers.some(
+        (user) =>
+          normalizeDisplayNameForCompare(user.displayName) === normalizeDisplayNameForCompare(displayName)
+      )
+    ) {
+      suffix += 1;
+      displayName = `${baseName} ${suffix}`;
+    }
+
+    const handle = generateUniqueHandle(displayName, nextUsers);
+    const fakeUser: StoredUser = {
+      id: `${FAKE_USER_ID_PREFIX}${Date.now()}_${i}_${Math.floor(Math.random() * 1000)}`,
+      email: `${handle}.${i + 1}${FAKE_USER_EMAIL_DOMAIN}`,
+      password: 'test1234',
+      displayName,
+      handle,
+      createdAt: new Date().toISOString()
+    };
+    nextUsers.unshift(fakeUser);
+    subscriptions[fakeUser.id] = subscriptions[fakeUser.id] ?? getDefaultSubscription();
+    created += 1;
+  }
+
+  writeJson(USERS_KEY, nextUsers);
+  writeSubscriptions(subscriptions);
+  emitAuthChanged();
+  return { ok: true, created };
+}
+
+export function purgeFakeUsersLocal(): { ok: boolean; removed: number; error?: string } {
+  if (!isModoEnabledLocal()) {
+    return { ok: false, removed: 0, error: 'Mode modérateur requis.' };
+  }
+  const users = readJson<StoredUser[]>(USERS_KEY, []);
+  const fakeIds = new Set(users.filter((user) => isFakeUserRecord(user)).map((user) => user.id));
+  if (!fakeIds.size) return { ok: true, removed: 0 };
+
+  const keptUsers = users.filter((user) => !fakeIds.has(user.id));
+  writeJson(USERS_KEY, keptUsers);
+
+  const contacts = readJson<ContactRequest[]>(CONTACTS_KEY, []);
+  const keptContacts = contacts.filter(
+    (item) => !fakeIds.has(item.requesterUserId) && !fakeIds.has(item.targetUserId)
+  );
+  writeJson(CONTACTS_KEY, keptContacts);
+
+  const subscriptions = readSubscriptions();
+  const nextSubscriptions = { ...subscriptions };
+  for (const fakeId of fakeIds) {
+    delete nextSubscriptions[fakeId];
+  }
+  writeSubscriptions(nextSubscriptions);
+
+  const session = getCurrentSessionUser();
+  if (session && fakeIds.has(session.id)) {
+    signOutLocal();
+  } else {
+    emitAuthChanged();
+  }
+  return { ok: true, removed: fakeIds.size };
+}
+
 export function updateAccountSecurityLocal(input: {
   userId: string;
   currentPassword: string;
@@ -345,11 +453,17 @@ export function getUserSubscriptionLocal(userId: string): UserSubscriptionInfo {
   return next[userId];
 }
 
-export function searchUsersLocal(query: string, currentUserId?: string): AuthSessionUser[] {
+export function searchUsersLocal(
+  query: string,
+  currentUserId?: string,
+  options?: { includeFakeUsers?: boolean }
+): AuthSessionUser[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  const includeFakeUsers = options?.includeFakeUsers ?? false;
   return listLocalUsers()
     .filter((user) => user.id !== currentUserId)
+    .filter((user) => (includeFakeUsers ? true : !isFakeCommunityUser(user)))
     .filter(
       (user) =>
         user.displayName.toLowerCase().includes(q) ||
