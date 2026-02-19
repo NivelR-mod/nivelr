@@ -4,6 +4,7 @@ export interface AuthSessionUser {
   displayName: string;
   handle: string;
   createdAt: string;
+  avatarDataUrl?: string;
 }
 
 export type SubscriptionPlan = 'FREE_S1' | 'PREMIUM' | 'FOUNDER';

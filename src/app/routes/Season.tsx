@@ -1,5 +1,8 @@
 import { CSSProperties, useEffect, useMemo, useState } from 'react';
-import { getAscensionTeamOverview } from '../../gamification/ascension';
+import {
+  getAscensionStatBonusPercent,
+  getAscensionTeamOverview
+} from '../../gamification/ascension';
 import { AscensionRole, AscensionStatKey, GamificationState } from '../../gamification/types';
 import {
   getCurrentSessionUser,
@@ -20,20 +23,20 @@ interface SeasonProps {
   onLeaveTeam: () => void;
 }
 
-const ROLE_OPTIONS: Array<{ id: AscensionRole; label: string; desc: string }> = [
-  { id: 'PERFORMEUR', label: 'Performeur', desc: '+20% PA sur séances RPE >= 7' },
-  { id: 'PILIER', label: 'Pilier', desc: '+10% PA global +10 PA si semaine active' },
-  { id: 'EXPLORATEUR', label: 'Explorateur', desc: '+20% PA si 3 types dans la semaine' },
-  { id: 'STRATEGE', label: 'Stratège', desc: '+15% PA si semaine équilibrée' },
-  { id: 'MENTOR', label: 'Mentor', desc: '+10% PA si défi mensuel actif (+collectif jalon)' }
-];
-
 const STAT_LABELS: Record<AscensionStatKey, string> = {
   ENDURANCE: 'Endurance',
   INTENSITE: 'Intensité',
   REGULARITE: 'Régularité',
   MAITRISE: 'Maîtrise',
   EXPLORATION: 'Exploration'
+};
+
+const BUILD_AXIS_CONDITIONS: Record<AscensionStatKey, string> = {
+  ENDURANCE: 'Actif sur séances faciles (RPE <= 6)',
+  INTENSITE: 'Actif sur séances intenses (RPE >= 7)',
+  REGULARITE: 'Actif au déclenchement semaine active (3e séance de la semaine)',
+  MAITRISE: 'Actif si semaine équilibrée (>=1 facile, >=1 intense, volume <= +15% vs semaine passée)',
+  EXPLORATION: 'Actif si semaine variée (au moins 3 familles: endurance/qualité/longue/renfo/mobilité)'
 };
 
 interface BuildPreset {
@@ -118,6 +121,18 @@ function fitStatsToBudget(
   return next;
 }
 
+function inferRoleFromStats(stats: Record<AscensionStatKey, number>): AscensionRole {
+  const ranking: Array<{ key: AscensionStatKey; role: AscensionRole; value: number }> = [
+    { key: 'INTENSITE', role: 'PERFORMEUR', value: stats.INTENSITE },
+    { key: 'EXPLORATION', role: 'EXPLORATEUR', value: stats.EXPLORATION },
+    { key: 'MAITRISE', role: 'STRATEGE', value: stats.MAITRISE },
+    { key: 'REGULARITE', role: 'PILIER', value: stats.REGULARITE },
+    { key: 'ENDURANCE', role: 'PILIER', value: stats.ENDURANCE }
+  ];
+  ranking.sort((a, b) => b.value - a.value);
+  return ranking[0]?.role ?? 'PILIER';
+}
+
 export default function Season({
   gamificationState,
   onSetRole,
@@ -150,6 +165,8 @@ export default function Season({
   const [draftStats, setDraftStats] = useState<Record<AscensionStatKey, number>>(
     myBuild?.stats ?? { ENDURANCE: 0, INTENSITE: 0, REGULARITE: 0, MAITRISE: 0, EXPLORATION: 0 }
   );
+  const isModoEnabled =
+    typeof window !== 'undefined' && window.localStorage.getItem('nivelr_modo_enabled') === '1';
   const session = getCurrentSessionUser();
   const usersCatalog = useMemo(() => listLocalUsers(), [socialRefreshTick]);
   const userIdentityById = useMemo(
@@ -192,6 +209,11 @@ export default function Season({
     if (!season) return false;
     return nowTs < new Date(season.startDate).getTime();
   }, [nowTs, season]);
+  const seasonEnded = useMemo(() => {
+    if (!season) return false;
+    return nowTs > new Date(season.endDate).getTime();
+  }, [nowTs, season]);
+  const buildEditOpen = isModoEnabled || seasonNotStarted || weekOneOpen || seasonEnded;
   const seasonCountdown = useMemo(() => {
     if (!seasonNotStarted || !season) return null;
     const diffMs = Math.max(0, new Date(season.startDate).getTime() - nowTs);
@@ -211,7 +233,9 @@ export default function Season({
     : '';
 
   const pointsUsed = Object.values(draftStats).reduce((sum, value) => sum + value, 0);
-  const pointsBudget = Math.min(30, Math.max(0, (gamificationState.userLevel.level - 15) * 2));
+  const pointsBudget = isModoEnabled
+    ? 30
+    : Math.min(30, Math.max(0, (gamificationState.userLevel.level - 15) * 2));
   const activePresetId =
     myBuild?.role && myBuild?.stats
       ? BUILD_PRESETS.find((preset) => preset.role === myBuild.role && isSameStats(preset.stats, myBuild.stats))
@@ -675,14 +699,10 @@ export default function Season({
       <article className="card premium-section season-build-card">
         <h2>Build saisonnier</h2>
         <p className="page-subtitle season-build-state">
-          {weekOneOpen
-            ? `Semaine 1 active: rôle et stats modifiables (${pointsUsed}/${pointsBudget} points).`
-            : 'Semaine 1 terminée: build verrouillé pour la saison.'}
+          {buildEditOpen
+            ? `Build modifiable (${pointsUsed}/${pointsBudget} points).`
+            : 'Build verrouillé pendant la saison active (hors semaine 1).'}
         </p>
-        <p className="season-build-budget-note">
-          Budget lié au niveau: (Niveau {gamificationState.userLevel.level} - 15) x 2 = {pointsBudget} points (max 30).
-        </p>
-
         <div className="season-build-mode-switch">
           <button
             type="button"
@@ -717,7 +737,7 @@ export default function Season({
                 ) : null}
                 <button
                   type="button"
-                  disabled={!weekOneOpen}
+                  disabled={!buildEditOpen}
                   onClick={() => {
                     const fitted = fitStatsToBudget(preset.stats, pointsBudget);
                     setDraftStats(fitted);
@@ -732,20 +752,9 @@ export default function Season({
           </div>
         ) : (
           <>
-            <div className="season-role-grid">
-              {ROLE_OPTIONS.map((role) => (
-                <button
-                  key={role.id}
-                  type="button"
-                  className={`season-role-card ${myBuild?.role === role.id ? 'is-active' : ''}`}
-                  disabled={!weekOneOpen}
-                  onClick={() => onSetRole(role.id)}
-                >
-                  <strong>{role.label}</strong>
-                  <small>{role.desc}</small>
-                </button>
-              ))}
-            </div>
+            <p className="page-subtitle">
+              Build manuel: répartis tes points entre Endurance, Intensité, Régularité, Maîtrise et Exploration.
+            </p>
 
             <div className="season-stats-grid">
               {(Object.keys(draftStats) as AscensionStatKey[]).map((key) => (
@@ -756,7 +765,7 @@ export default function Season({
                     min={0}
                     max={25}
                     value={draftStats[key]}
-                    disabled={!weekOneOpen}
+                    disabled={!buildEditOpen}
                     onChange={(event) =>
                       setDraftStats((prev) => ({
                         ...prev,
@@ -772,11 +781,49 @@ export default function Season({
             <div className="goal-actions season-build-actions">
               <button
                 type="button"
-                disabled={!weekOneOpen || pointsUsed > pointsBudget}
-                onClick={() => onSetStats(draftStats)}
+                disabled={!buildEditOpen || pointsUsed > pointsBudget}
+                onClick={() => {
+                  const inferredRole = inferRoleFromStats(draftStats);
+                  onSetRole(inferredRole);
+                  onSetStats(draftStats);
+                }}
               >
                 Enregistrer les stats
               </button>
+              <button
+                type="button"
+                className="season-build-reset-btn"
+                disabled={!buildEditOpen}
+                onClick={() =>
+                  setDraftStats({
+                    ENDURANCE: 0,
+                    INTENSITE: 0,
+                    REGULARITE: 0,
+                    MAITRISE: 0,
+                    EXPLORATION: 0
+                  })
+                }
+              >
+                Réinitialiser
+              </button>
+            </div>
+            <div className="season-role-grid">
+              {(Object.keys(draftStats) as AscensionStatKey[]).map((key) => {
+                const currentPoints = draftStats[key] ?? 0;
+                const nextPoints = Math.min(25, currentPoints + 1);
+                const currentBonus = getAscensionStatBonusPercent(key, currentPoints);
+                const nextBonus = getAscensionStatBonusPercent(key, nextPoints);
+                const delta = Math.max(0, nextBonus - currentBonus);
+                return (
+                  <article key={key} className="season-role-card is-readonly">
+                    <strong>{STAT_LABELS[key]}</strong>
+                    <small>{BUILD_AXIS_CONDITIONS[key]}</small>
+                    <span className="season-role-scaling">
+                      Bonus actuel: {currentBonus.toFixed(2)}% · +1 pt: +{delta.toFixed(2)}%
+                    </span>
+                  </article>
+                );
+              })}
             </div>
           </>
         )}

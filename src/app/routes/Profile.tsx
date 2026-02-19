@@ -6,6 +6,7 @@ import {
   getUserSubscriptionLocal,
   signOutLocal,
   updateAccountSecurityLocal,
+  updateProfileAvatarLocal,
   updateProfileLocal
 } from '../../backend/localAuth';
 
@@ -19,8 +20,13 @@ export default function Profile(): JSX.Element {
   const [nextPassword, setNextPassword] = useState('');
   const [confirmNextPassword, setConfirmNextPassword] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
+  const [avatarMessage, setAvatarMessage] = useState('');
   const [securityMessage, setSecurityMessage] = useState('');
   const [error, setError] = useState('');
+  const [avatarCropSource, setAvatarCropSource] = useState<string | null>(null);
+  const [avatarZoom, setAvatarZoom] = useState(1);
+  const [avatarOffsetX, setAvatarOffsetX] = useState(0);
+  const [avatarOffsetY, setAvatarOffsetY] = useState(0);
 
   const subscriptionLabelMap: Record<string, string> = {
     FREE_S1: 'Saison 1 Gratuite',
@@ -81,14 +87,191 @@ export default function Profile(): JSX.Element {
     setConfirmNextPassword('');
   };
 
+  const onAvatarFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    if (!session) return;
+    setError('');
+    setAvatarMessage('');
+    const file = event.target.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Format invalide. Utilise une image (jpg, png, webp).');
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+      setError('Image trop lourde (max 1.5 MB).');
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(new Error('read_error'));
+      reader.readAsDataURL(file);
+    }).catch(() => '');
+    if (!dataUrl) {
+      setError("Impossible de lire l'image.");
+      return;
+    }
+    setAvatarZoom(1);
+    setAvatarOffsetX(0);
+    setAvatarOffsetY(0);
+    setAvatarCropSource(dataUrl);
+  };
+
+  const onRemoveAvatar = (): void => {
+    if (!session) return;
+    setError('');
+    setAvatarMessage('');
+    const result = updateProfileAvatarLocal(session.id, null);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setAvatarMessage('Photo de profil supprimée.');
+  };
+
+  const buildCroppedAvatar = async (
+    dataUrl: string,
+    zoom: number,
+    offsetX: number,
+    offsetY: number
+  ): Promise<string | null> =>
+    new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        const side = Math.min(width, height);
+        const safeZoom = Math.max(1, Math.min(3, zoom));
+        const cropSize = side / safeZoom;
+
+        const centerXBase = width / 2;
+        const centerYBase = height / 2;
+        const centerX = centerXBase + (offsetX / 100) * ((width - cropSize) / 2);
+        const centerY = centerYBase + (offsetY / 100) * ((height - cropSize) / 2);
+        const sx = Math.max(0, Math.min(width - cropSize, centerX - cropSize / 2));
+        const sy = Math.max(0, Math.min(height - cropSize, centerY - cropSize / 2));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(image, sx, sy, cropSize, cropSize, 0, 0, 512, 512);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      image.onerror = () => resolve(null);
+      image.src = dataUrl;
+    });
+
+  const onConfirmAvatarCrop = async (): Promise<void> => {
+    if (!session || !avatarCropSource) return;
+    setError('');
+    setAvatarMessage('');
+    const cropped = await buildCroppedAvatar(avatarCropSource, avatarZoom, avatarOffsetX, avatarOffsetY);
+    if (!cropped) {
+      setError('Recadrage impossible.');
+      return;
+    }
+    const result = updateProfileAvatarLocal(session.id, cropped);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setAvatarCropSource(null);
+    setAvatarMessage('Photo de profil mise à jour.');
+  };
+
   return (
     <section className="page">
+      {avatarCropSource ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <article className="card session-modal profile-crop-modal">
+            <h2>Recadrer la photo</h2>
+            <div className="profile-crop-stage">
+              <img
+                src={avatarCropSource}
+                alt="Recadrage avatar"
+                style={{
+                  transform: `translate(${avatarOffsetX}%, ${avatarOffsetY}%) scale(${avatarZoom})`
+                }}
+              />
+              <div className="profile-crop-mask" />
+            </div>
+            <div className="profile-crop-controls">
+              <label>
+                Zoom
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={avatarZoom}
+                  onChange={(event) => setAvatarZoom(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Décalage horizontal
+                <input
+                  type="range"
+                  min={-100}
+                  max={100}
+                  step={1}
+                  value={avatarOffsetX}
+                  onChange={(event) => setAvatarOffsetX(Number(event.target.value))}
+                />
+              </label>
+              <label>
+                Décalage vertical
+                <input
+                  type="range"
+                  min={-100}
+                  max={100}
+                  step={1}
+                  value={avatarOffsetY}
+                  onChange={(event) => setAvatarOffsetY(Number(event.target.value))}
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setAvatarCropSource(null)}>
+                Annuler
+              </button>
+              <button type="button" onClick={onConfirmAvatarCrop}>
+                Enregistrer la photo
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
+
       <h1>Profil</h1>
       <p className="page-subtitle">Gère ton identité, la sécurité du compte et ton abonnement.</p>
 
       <div className="list">
         <article className="card premium-section">
           <h2>Identité</h2>
+          <div className="profile-avatar-wrap">
+            <div className="profile-avatar-preview">
+              {session.avatarDataUrl ? (
+                <img src={session.avatarDataUrl} alt="Photo de profil" />
+              ) : (
+                <span>{(session.displayName || '?').trim().charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="profile-avatar-actions">
+              <label className="btn-compact import-label profile-photo-import-btn">
+                Importer une photo
+                <input type="file" accept="image/*" onChange={onAvatarFileChange} className="import-input" />
+              </label>
+              <button type="button" className="btn-compact danger-outline" onClick={onRemoveAvatar}>
+                Supprimer la photo
+              </button>
+            </div>
+          </div>
           <p className="page-subtitle">
             Aperçu public actuel: <strong>{session.displayName || 'Ton nom'}</strong> ·{' '}
             <strong>@{session.handle || 'ton_handle'}</strong>
@@ -99,6 +282,7 @@ export default function Profile(): JSX.Element {
               <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
             </label>
             {profileMessage ? <p className="inline-info">{profileMessage}</p> : null}
+            {avatarMessage ? <p className="inline-info">{avatarMessage}</p> : null}
             {error ? <p className="error pseudo-error-note">{error}</p> : null}
             <button type="submit">Enregistrer l'identité</button>
           </form>

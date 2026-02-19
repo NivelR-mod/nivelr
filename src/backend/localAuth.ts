@@ -174,7 +174,8 @@ function toPublicUser(user: StoredUser): AuthSessionUser {
     email: user.email,
     displayName: user.displayName,
     handle: user.handle,
-    createdAt: user.createdAt
+    createdAt: user.createdAt,
+    avatarDataUrl: user.avatarDataUrl
   };
 }
 
@@ -284,6 +285,28 @@ export function updateProfileLocal(userId: string, patch: { displayName: string 
       ...item,
       displayName: nextDisplayName,
       handle: nextHandle
+    };
+    return updated;
+  });
+  writeJson(USERS_KEY, nextUsers);
+  if (!updated) return { user: null, error: 'Utilisateur introuvable.' };
+  const publicUser = toPublicUser(updated);
+  writeJson(SESSION_KEY, publicUser);
+  emitAuthChanged();
+  return { user: publicUser };
+}
+
+export function updateProfileAvatarLocal(userId: string, avatarDataUrl: string | null): {
+  user: AuthSessionUser | null;
+  error?: string;
+} {
+  const users = readJson<StoredUser[]>(USERS_KEY, []);
+  let updated: StoredUser | null = null;
+  const nextUsers = users.map((item) => {
+    if (item.id !== userId) return item;
+    updated = {
+      ...item,
+      avatarDataUrl: avatarDataUrl ?? undefined
     };
     return updated;
   });
@@ -530,6 +553,54 @@ export function sendContactRequestLocal(requesterUserId: string, targetUserId: s
   return { ok: true };
 }
 
+export function addFriendDirectLocal(requesterUserId: string, targetUserId: string): {
+  ok: boolean;
+  error?: string;
+} {
+  if (!isModoEnabledLocal()) {
+    return { ok: false, error: 'Mode modérateur requis.' };
+  }
+  if (!requesterUserId || !targetUserId || requesterUserId === targetUserId) {
+    return { ok: false, error: 'Ajout ami invalide.' };
+  }
+  const all = listContactsInternal();
+  const existing = all.find(
+    (item) =>
+      (item.requesterUserId === requesterUserId && item.targetUserId === targetUserId) ||
+      (item.requesterUserId === targetUserId && item.targetUserId === requesterUserId)
+  );
+  if (existing) {
+    if (existing.status === 'ACCEPTED') return { ok: true };
+    const now = new Date().toISOString();
+    const next = all.map((item) =>
+      item.id === existing.id
+        ? {
+            ...item,
+            status: 'ACCEPTED' as const,
+            updatedAt: now
+          }
+        : item
+    );
+    saveContactsInternal(next);
+    return { ok: true };
+  }
+
+  const now = new Date().toISOString();
+  const next: ContactRequest[] = [
+    {
+      id: `c_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      requesterUserId,
+      targetUserId,
+      status: 'ACCEPTED',
+      createdAt: now,
+      updatedAt: now
+    },
+    ...all
+  ];
+  saveContactsInternal(next);
+  return { ok: true };
+}
+
 export function respondToContactRequestLocal(
   requestId: string,
   targetUserId: string,
@@ -548,6 +619,44 @@ export function respondToContactRequestLocal(
     };
   });
   if (!changed) return { ok: false, error: 'Demande introuvable.' };
+  saveContactsInternal(next);
+  return { ok: true };
+}
+
+export function cancelOutgoingContactRequestLocal(
+  requestId: string,
+  requesterUserId: string
+): { ok: boolean; error?: string } {
+  const all = listContactsInternal();
+  const target = all.find((item) => item.id === requestId);
+  if (!target) return { ok: false, error: 'Demande introuvable.' };
+  if (target.requesterUserId !== requesterUserId) {
+    return { ok: false, error: 'Action non autorisée.' };
+  }
+  if (target.status !== 'PENDING') {
+    return { ok: false, error: 'Seules les demandes en attente peuvent être annulées.' };
+  }
+  const next = all.filter((item) => item.id !== requestId);
+  saveContactsInternal(next);
+  return { ok: true };
+}
+
+export function removeFriendLocal(userId: string, friendUserId: string): { ok: boolean; error?: string } {
+  if (!userId || !friendUserId || userId === friendUserId) {
+    return { ok: false, error: 'Suppression invalide.' };
+  }
+  const all = listContactsInternal();
+  const existingAccepted = all.filter(
+    (item) =>
+      item.status === 'ACCEPTED' &&
+      ((item.requesterUserId === userId && item.targetUserId === friendUserId) ||
+        (item.requesterUserId === friendUserId && item.targetUserId === userId))
+  );
+  if (!existingAccepted.length) {
+    return { ok: false, error: 'Ami introuvable.' };
+  }
+  const acceptedIds = new Set(existingAccepted.map((item) => item.id));
+  const next = all.filter((item) => !acceptedIds.has(item.id));
   saveContactsInternal(next);
   return { ok: true };
 }

@@ -13,6 +13,7 @@ import AuthSignIn from './app/routes/AuthSignIn';
 import Profile from './app/routes/Profile';
 import Subscription from './app/routes/Subscription';
 import Users from './app/routes/Users';
+import Badges from './app/routes/Badges';
 import {
   getCurrentSessionUser,
   LOCAL_AUTH_CHANGED_EVENT,
@@ -181,6 +182,21 @@ function App(): JSX.Element {
     ? gamificationState.userLevel.xpToNextLevel
     : getXpToNextLevel(displayXp);
   const xpTarget = xpToNextLevel > 0 ? displayXp + xpToNextLevel : displayXp;
+  const streakWeeks = gamificationState.userStreak.activeWeeks;
+  const activeBuildRole =
+    gamificationState.ascension.userBuilds.find(
+      (build) =>
+        build.userId === gamificationState.userId &&
+        build.seasonId === gamificationState.ascension.currentSeasonId
+    )?.role ?? null;
+  const currentAscSeason =
+    gamificationState.ascension.seasons.find(
+      (season) => season.id === gamificationState.ascension.currentSeasonId
+    ) ?? null;
+  const reachedCamp =
+    currentAscSeason && currentAscSeason.milestoneReached.length
+      ? Math.max(...currentAscSeason.milestoneReached)
+      : null;
   const currentWeekKey = getCurrentWeekKey();
   const weekSessions = state.sessions.filter(
     (session) => getWeekKeyFromDate(new Date(session.createdAt)) === currentWeekKey
@@ -700,16 +716,31 @@ function App(): JSX.Element {
         {sessionUser ? (
           <aside className="app-sidebar">
             <div className="brand-block">
-              <div className="brand-logo-shell">
-                <img src="/nivelr-logo.jpg" alt="NIVELR" className="brand-logo" />
+              <div className="sidebar-profile-head">
+                <div className="sidebar-avatar-shell">
+                  {sessionUser.avatarDataUrl ? (
+                    <img src={sessionUser.avatarDataUrl} alt="Photo de profil" className="sidebar-avatar" />
+                  ) : (
+                    <span className="sidebar-avatar-fallback">
+                      {(sessionUser.displayName || '?').trim().charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="sidebar-profile-text">
+                  <strong>{sessionUser.displayName}</strong>
+                  <span>@{sessionUser.handle}</span>
+                  <p className="brand-description">Earn Your Level.</p>
+                </div>
               </div>
-              <p className="brand-description">
-                Earn Your Level.
-              </p>
               <div className="sidebar-sport-glance">
                 <span>{weekSessions.length} seance(s)</span>
                 <span>{weekMinutes} min</span>
                 <span>{weekDistance.toFixed(1)} km</span>
+              </div>
+              <div className="sidebar-achievements">
+                {streakWeeks > 0 ? <span className="sidebar-achievement">Streak {streakWeeks} sem</span> : null}
+                {activeBuildRole ? <span className="sidebar-achievement">Style {activeBuildRole}</span> : null}
+                {reachedCamp ? <span className="sidebar-achievement">Camp {reachedCamp}%</span> : null}
               </div>
             </div>
 
@@ -785,6 +816,7 @@ function App(): JSX.Element {
                   {!canAccessGoal ? <small className="nav-lock">🔒 N20</small> : null}
                 </span>
               </NavLink>
+              <NavLink to="/badges">Badges</NavLink>
               <NavLink to="/guide-xp">Guide XP</NavLink>
             </nav>
 
@@ -945,6 +977,20 @@ function App(): JSX.Element {
                     onClaimMissionV1={onClaimMissionV1}
                     onUpdateGoals={onUpdateGoals}
                   />
+                }
+              />
+              <Route
+                path="/badges"
+                element={
+                  sessionUser ? (
+                    <Badges
+                      gamificationState={gamificationState}
+                      gamificationMissions={gamificationMissions}
+                      level={displayLevel}
+                    />
+                  ) : (
+                    renderAuthLockedPage('Badges', 'Connecte-toi pour voir tes badges debloques.')
+                  )
                 }
               />
               <Route

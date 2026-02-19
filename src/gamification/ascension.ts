@@ -22,6 +22,31 @@ const ASCENSION_CONFIG = {
   maxStatsPoints: 30
 } as const;
 
+const ROLE_BONUS_MAX_PERCENT: Record<AscensionRole, number> = {
+  PERFORMEUR: 20,
+  PILIER: 10,
+  EXPLORATEUR: 20,
+  STRATEGE: 15,
+  MENTOR: 10
+};
+
+const ROLE_BONUS_STAT_KEY: Record<AscensionRole, AscensionStatKey> = {
+  PERFORMEUR: 'INTENSITE',
+  PILIER: 'REGULARITE',
+  EXPLORATEUR: 'EXPLORATION',
+  STRATEGE: 'MAITRISE',
+  MENTOR: 'ENDURANCE'
+};
+
+const ROLE_BONUS_EXPONENT = 1.6;
+const STAT_BONUS_CONFIG: Record<AscensionStatKey, { maxPercent: number; exponent: number }> = {
+  ENDURANCE: { maxPercent: 18, exponent: 1.45 },
+  INTENSITE: { maxPercent: 20, exponent: 1.7 },
+  REGULARITE: { maxPercent: 14, exponent: 1.35 },
+  MAITRISE: { maxPercent: 16, exponent: 1.6 },
+  EXPLORATION: { maxPercent: 16, exponent: 1.55 }
+};
+
 const ASCENSION_SEASON_1_START = new Date(2026, 2, 1);
 
 function toDayKey(date: Date): string {
@@ -53,17 +78,60 @@ function isWeekActive(weekSessions: Session[]): boolean {
   return weekSessions.length >= 3;
 }
 
-function isWeekBalanced(weekSessions: Session[]): boolean {
-  const buckets = new Set<string>();
-  if (weekSessions.some((s) => s.subtype === 'EF')) buckets.add('EASY');
-  if (weekSessions.some((s) => s.feelings.rpe >= 7)) buckets.add('INTENSE');
-  if (weekSessions.some((s) => s.subtype === 'SORTIE_LONGUE')) buckets.add('LONG');
-  if (weekSessions.some((s) => s.subtype === 'RENFO')) buckets.add('RENFO');
-  return buckets.size >= 3;
+function sumDistanceKm(sessions: Session[]): number {
+  return sessions.reduce((sum, session) => sum + Math.max(0, session.distanceKm ?? 0), 0);
+}
+
+function getPreviousWeekSessions(sessions: Session[], targetDate: Date): Session[] {
+  const previousWeekStart = addDays(getWeekStart(targetDate), -7);
+  const key = toDayKey(previousWeekStart);
+  return sessions.filter((session) => weekKey(new Date(session.createdAt)) === key);
+}
+
+function isWeekBalanced(weekSessions: Session[], allSessions: Session[], targetDate: Date): boolean {
+  const hasEasy = weekSessions.some((session) => session.feelings.rpe <= 6);
+  const hasIntense = weekSessions.some((session) => session.feelings.rpe >= 7);
+  if (!hasEasy || !hasIntense) return false;
+
+  const previousWeekSessions = getPreviousWeekSessions(allSessions, targetDate);
+  const previousDistance = sumDistanceKm(previousWeekSessions);
+  if (previousDistance <= 0) return true;
+
+  const currentDistance = sumDistanceKm(weekSessions);
+  return currentDistance <= previousDistance * 1.15;
+}
+
+function trainingFamilyForSubtype(subtype: Session['subtype']): string {
+  if (subtype === 'EF') return 'ENDURANCE';
+  if (subtype === 'SEUIL' || subtype === 'VMA') return 'QUALITE';
+  if (subtype === 'SORTIE_LONGUE') return 'LONGUE';
+  if (subtype === 'RENFO') return 'RENFO';
+  if (subtype === 'MOBILITE') return 'MOBILITE';
+  return 'AUTRE';
 }
 
 function weekHasVariety(weekSessions: Session[]): boolean {
-  return new Set(weekSessions.map((s) => s.subtype)).size >= 3;
+  return new Set(weekSessions.map((session) => trainingFamilyForSubtype(session.subtype))).size >= 3;
+}
+
+export function getAscensionRoleStatKey(role: AscensionRole): AscensionStatKey {
+  return ROLE_BONUS_STAT_KEY[role];
+}
+
+export function getAscensionRoleBonusPercent(role: AscensionRole, statPoints: number): number {
+  const cappedPoints = Math.max(0, Math.min(25, Math.floor(statPoints)));
+  const ratio = cappedPoints / 25;
+  const scaled = Math.pow(ratio, ROLE_BONUS_EXPONENT);
+  const maxPercent = ROLE_BONUS_MAX_PERCENT[role];
+  return Math.round(maxPercent * scaled * 100) / 100;
+}
+
+export function getAscensionStatBonusPercent(key: AscensionStatKey, statPoints: number): number {
+  const cappedPoints = Math.max(0, Math.min(25, Math.floor(statPoints)));
+  const config = STAT_BONUS_CONFIG[key];
+  const ratio = cappedPoints / 25;
+  const scaled = Math.pow(ratio, config.exponent);
+  return Math.round(config.maxPercent * scaled * 100) / 100;
 }
 
 function getSessionsInWeek(sessions: Session[], targetDate: Date): Session[] {
@@ -95,6 +163,10 @@ function isSeasonActiveNow(season: AscensionSeason, now: Date): boolean {
   const start = new Date(season.startDate).getTime();
   const end = new Date(season.endDate).getTime();
   return ts >= start && ts <= end;
+}
+
+function isAfterSeasonEnd(season: AscensionSeason, now: Date): boolean {
+  return now.getTime() > new Date(season.endDate).getTime();
 }
 
 function defaultStats(): Record<AscensionStatKey, number> {
@@ -234,6 +306,11 @@ function isWeekOne(season: AscensionSeason, now: Date): boolean {
   return ts >= start && ts <= endWeekOne;
 }
 
+function isModoBypassEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('nivelr_modo_enabled') === '1';
+}
+
 function activeMembership(state: AscensionState, userId: string, seasonId: string): AscensionTeamMember | null {
   return (
     state.teamMembers.find(
@@ -296,29 +373,60 @@ export function pa_calculation(
   if (!membership) return { basePa: 0, finalPa: 0, details: 'No active team membership' };
 
   const build = getOrCreateBuild(asc, gState.userId, season.id);
-  const weekSessions = getSessionsInWeek(sessionsAfterInsert, new Date(session.createdAt));
+  const sessionDate = new Date(session.createdAt);
+  const weekSessions = getSessionsInWeek(sessionsAfterInsert, sessionDate);
+  const weekSessionsBeforeInsert = weekSessions.filter((item) => item.id !== session.id);
   const weekActive = isWeekActive(weekSessions);
-  const weekBalanced = isWeekBalanced(weekSessions);
+  const weekBecameActive = !isWeekActive(weekSessionsBeforeInsert) && weekActive;
+  const weekBalanced = isWeekBalanced(weekSessions, sessionsAfterInsert, sessionDate);
   const weekVariety = weekHasVariety(weekSessions);
 
   let base = Math.max(0, session.distanceKm ?? 0);
   if (session.feelings.rpe >= 7) base += ASCENSION_CONFIG.intensityBonus;
-  if (weekActive) base += ASCENSION_CONFIG.regularityBonus;
-  if (build.role === 'PILIER' && weekActive) base += 10;
+  if (weekBecameActive) base += ASCENSION_CONFIG.regularityBonus;
+  if (build.role === 'PILIER' && weekBecameActive) base += 10;
 
   let roleBonus = 0;
-  if (build.role === 'PERFORMEUR' && session.feelings.rpe >= 7) roleBonus += 0.2;
-  if (build.role === 'PILIER') roleBonus += 0.1;
-  if (build.role === 'EXPLORATEUR' && weekVariety) roleBonus += 0.2;
-  if (build.role === 'STRATEGE' && weekBalanced) roleBonus += 0.15;
-  if (build.role === 'MENTOR' && monthlyChallengeActiveForUser(gState, now)) roleBonus += 0.1;
+  const role = build.role;
+  const roleStatPoints = role ? build.stats[getAscensionRoleStatKey(role)] : 0;
+  const roleScaledBonus = role ? getAscensionRoleBonusPercent(role, roleStatPoints) / 100 : 0;
+  if (role === 'PERFORMEUR' && session.feelings.rpe >= 7) roleBonus += roleScaledBonus;
+  if (role === 'PILIER') roleBonus += roleScaledBonus;
+  if (role === 'EXPLORATEUR' && weekVariety) roleBonus += roleScaledBonus;
+  if (role === 'STRATEGE' && weekBalanced) roleBonus += roleScaledBonus;
+  if (role === 'MENTOR' && monthlyChallengeActiveForUser(gState, now)) roleBonus += roleScaledBonus;
 
   let statsBonus = 0;
-  if (session.feelings.rpe <= 6) statsBonus += Math.min(ASCENSION_CONFIG.statsBonusCap, build.stats.ENDURANCE / 100);
-  if (session.feelings.rpe >= 7) statsBonus += Math.min(ASCENSION_CONFIG.statsBonusCap, build.stats.INTENSITE / 100);
-  if (weekActive) statsBonus += Math.min(ASCENSION_CONFIG.statsBonusCap, build.stats.REGULARITE / 100);
-  if (weekBalanced) statsBonus += Math.min(ASCENSION_CONFIG.statsBonusCap, build.stats.MAITRISE / 100);
-  if (weekVariety) statsBonus += Math.min(ASCENSION_CONFIG.statsBonusCap, build.stats.EXPLORATION / 100);
+  if (session.feelings.rpe <= 6) {
+    statsBonus += Math.min(
+      ASCENSION_CONFIG.statsBonusCap,
+      getAscensionStatBonusPercent('ENDURANCE', build.stats.ENDURANCE) / 100
+    );
+  }
+  if (session.feelings.rpe >= 7) {
+    statsBonus += Math.min(
+      ASCENSION_CONFIG.statsBonusCap,
+      getAscensionStatBonusPercent('INTENSITE', build.stats.INTENSITE) / 100
+    );
+  }
+  if (weekBecameActive) {
+    statsBonus += Math.min(
+      ASCENSION_CONFIG.statsBonusCap,
+      getAscensionStatBonusPercent('REGULARITE', build.stats.REGULARITE) / 100
+    );
+  }
+  if (weekBalanced) {
+    statsBonus += Math.min(
+      ASCENSION_CONFIG.statsBonusCap,
+      getAscensionStatBonusPercent('MAITRISE', build.stats.MAITRISE) / 100
+    );
+  }
+  if (weekVariety) {
+    statsBonus += Math.min(
+      ASCENSION_CONFIG.statsBonusCap,
+      getAscensionStatBonusPercent('EXPLORATION', build.stats.EXPLORATION) / 100
+    );
+  }
 
   const teamBonus = teamDiversityBonus(asc, season.id, membership.teamId) + mentorCollectiveBonus(asc, season, membership.teamId);
   const combinedBonus = Math.max(-0.1, Math.min(ASCENSION_CONFIG.totalBonusCap, roleBonus + statsBonus + teamBonus));
@@ -449,7 +557,13 @@ export function setAscensionRole(
   now: Date = new Date()
 ): GamificationState {
   const season = getCurrentSeason(gState.ascension);
-  if (!season || !isWeekOne(season, now)) return gState;
+  const canEdit =
+    season &&
+    (isWeekOne(season, now) ||
+      isBeforeSeasonStart(season, now) ||
+      isAfterSeasonEnd(season, now) ||
+      isModoBypassEnabled());
+  if (!canEdit || !season) return gState;
   const build = getOrCreateBuild(gState.ascension, gState.userId, season.id);
   const nextBuild: AscensionUserBuild = { ...build, role, updatedAt: now.toISOString() };
   return {
@@ -469,7 +583,14 @@ export function setAscensionStats(
   now: Date = new Date()
 ): GamificationState {
   const season = getCurrentSeason(gState.ascension);
-  if (!season || !isWeekOne(season, now)) return gState;
+  const modoBypass = isModoBypassEnabled();
+  const canEdit =
+    season &&
+    (isWeekOne(season, now) ||
+      isBeforeSeasonStart(season, now) ||
+      isAfterSeasonEnd(season, now) ||
+      modoBypass);
+  if (!canEdit || !season) return gState;
   const capped: Record<AscensionStatKey, number> = {
     ENDURANCE: Math.max(0, Math.min(25, Math.round(stats.ENDURANCE || 0))),
     INTENSITE: Math.max(0, Math.min(25, Math.round(stats.INTENSITE || 0))),
@@ -478,10 +599,12 @@ export function setAscensionStats(
     EXPLORATION: Math.max(0, Math.min(25, Math.round(stats.EXPLORATION || 0)))
   };
   const pointsUsed = Object.values(capped).reduce((sum, v) => sum + v, 0);
-  const maxStatsPoints = Math.min(
-    ASCENSION_CONFIG.maxStatsPoints,
-    Math.max(0, Math.floor((gState.userLevel.level - 15) * 2))
-  );
+  const maxStatsPoints = modoBypass
+    ? ASCENSION_CONFIG.maxStatsPoints
+    : Math.min(
+        ASCENSION_CONFIG.maxStatsPoints,
+        Math.max(0, Math.floor((gState.userLevel.level - 15) * 2))
+      );
   if (pointsUsed > maxStatsPoints) return gState;
 
   const build = getOrCreateBuild(gState.ascension, gState.userId, season.id);
