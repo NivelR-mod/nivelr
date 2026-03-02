@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sportxp-cache-v5';
+const CACHE_NAME = 'sportxp-cache-v6';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -51,7 +51,8 @@ self.addEventListener('fetch', (event) => {
     url.pathname === '/nivelr-logo.jpg' ||
     url.pathname === '/motivation.jpg' ||
     url.pathname === '/cadre.jpg' ||
-    url.pathname === '/accessible.jpg'
+    url.pathname === '/accessible.jpg' ||
+    url.pathname === '/coach.jpg'
   ) {
     event.respondWith(
       fetch(request)

@@ -116,7 +116,7 @@ export default function Coach(): JSX.Element {
         {!loading && hubData && !hubData.intakeCompleted ? (
           <div className="coach-cta-row">
             <p>Ton test n’est pas encore complété. Il est requis avant d’ouvrir ton programme.</p>
-            <Link to="/coach/test" className="btn-compact">
+            <Link to="/coach/test" className="coach-action-btn">
               Démarrer le test
             </Link>
           </div>
@@ -140,7 +140,7 @@ export default function Coach(): JSX.Element {
 
             <div className="coach-cta-row is-secondary">
               <p>Tu veux recalibrer ton plan ?</p>
-              <Link to="/coach/test" className="btn-compact">
+              <Link to="/coach/test" className="coach-action-btn">
                 Refaire le test
               </Link>
             </div>
