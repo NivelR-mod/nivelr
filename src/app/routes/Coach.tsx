@@ -16,7 +16,7 @@ interface CoachSessionFeedbackRow {
   pace: string;
   rpe: string;
   fatigue: string;
-  pain: string;
+  sessionNotes: string;
 }
 
 function createSessionFeedbackRow(index: number): CoachSessionFeedbackRow {
@@ -28,7 +28,7 @@ function createSessionFeedbackRow(index: number): CoachSessionFeedbackRow {
     pace: '',
     rpe: '',
     fatigue: '',
-    pain: ''
+    sessionNotes: ''
   };
 }
 
@@ -107,8 +107,7 @@ export default function Coach(): JSX.Element {
         !row.duration.trim() ||
         !row.pace.trim() ||
         !row.rpe.trim() ||
-        !row.fatigue.trim() ||
-        !row.pain.trim()
+        !row.fatigue.trim()
     );
     if (incompleteRow) {
       setError('Merci de compléter tous les champs de chaque retour de séance.');
@@ -131,7 +130,7 @@ export default function Coach(): JSX.Element {
         `Rythme (min/km): ${row.pace.trim()}`,
         `RPE moyen: ${row.rpe.trim()}`,
         `Fatigue (1-5): ${row.fatigue.trim()}`,
-        `Douleurs éventuelles: ${row.pain.trim()}`
+        `Note libre séance: ${row.sessionNotes.trim() || 'Aucune note'}`
       ]),
       '',
       '=== RETOUR GÉNÉRAL ===',
@@ -266,7 +265,7 @@ export default function Coach(): JSX.Element {
                   </div>
                   <div className="coach-feedback-grid">
                     <label>
-                      Séance X
+                      Séance
                       <input
                         value={row.sessionLabel}
                         onChange={(event) =>
@@ -339,13 +338,14 @@ export default function Coach(): JSX.Element {
                       </select>
                     </label>
                     <label className="coach-feedback-field-full">
-                      Douleurs éventuelles
+                      Note libre séance
                       <textarea
-                        value={row.pain}
-                        onChange={(event) => updateSessionFeedbackRow(row.id, 'pain', event.target.value)}
+                        value={row.sessionNotes}
+                        onChange={(event) =>
+                          updateSessionFeedbackRow(row.id, 'sessionNotes', event.target.value)
+                        }
                         className="contact-message"
-                        placeholder="Ex: gêne légère mollet droit"
-                        required
+                        placeholder="Ex: bonnes sensations sur la fin, difficile sur la relance..."
                       />
                     </label>
                   </div>
