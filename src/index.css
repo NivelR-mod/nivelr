@@ -6491,7 +6491,7 @@ textarea::placeholder {
   overflow: hidden;
   background:
     linear-gradient(150deg, rgba(7, 18, 28, 0.88), rgba(8, 15, 24, 0.9)),
-    url('/Coach.jpg') center/cover no-repeat;
+    url('/coach.jpg') center/cover no-repeat;
   border-color: rgba(114, 200, 196, 0.34) !important;
 }
 
