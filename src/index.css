@@ -3367,7 +3367,7 @@ textarea:focus {
 }
 
 /* Global dark harmonization based on weekly-load palette */
-.card:not(.season-hero-card):not(.coach-hero-card),
+.card:not(.season-hero-card):not(.coach-hero-card):not(.sessions-filters-photo):not(.goal-settings-photo):not(.hero-card-photo):not(.recommendation-box-photo),
 .stats-grid p,
 .trend-card,
 .game-card,
@@ -3523,7 +3523,7 @@ textarea::placeholder {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(118deg, rgba(7, 18, 27, 0.8), rgba(7, 18, 27, 0.52)),
+    linear-gradient(118deg, rgba(7, 18, 27, 0.58), rgba(7, 18, 27, 0.34)),
     var(--sessions-filters-bg-image) center 42% / cover no-repeat !important;
   border-color: rgba(132, 200, 210, 0.62) !important;
   box-shadow:
@@ -3549,7 +3549,7 @@ textarea::placeholder {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(116deg, rgba(7, 17, 26, 0.8), rgba(7, 17, 26, 0.5)),
+    linear-gradient(116deg, rgba(7, 17, 26, 0.58), rgba(7, 17, 26, 0.3)),
     var(--add-session-reco-bg-image) center 28% / cover no-repeat !important;
   border-color: rgba(140, 204, 212, 0.6) !important;
   box-shadow:
@@ -3572,7 +3572,7 @@ textarea::placeholder {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(118deg, rgba(8, 19, 28, 0.78), rgba(8, 19, 28, 0.46)),
+    linear-gradient(118deg, rgba(8, 19, 28, 0.56), rgba(8, 19, 28, 0.28)),
     var(--stats-progression-bg-image) center 34% / cover no-repeat !important;
   border-color: rgba(135, 201, 209, 0.56) !important;
 }
@@ -3592,7 +3592,7 @@ textarea::placeholder {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(118deg, rgba(7, 17, 26, 0.82), rgba(7, 17, 26, 0.5)),
+    linear-gradient(118deg, rgba(7, 17, 26, 0.58), rgba(7, 17, 26, 0.3)),
     var(--goals-bg-image) center 42% / cover no-repeat !important;
   border-color: rgba(126, 194, 205, 0.6) !important;
   box-shadow:
