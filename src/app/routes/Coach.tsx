@@ -8,6 +8,30 @@ import {
   submitCoachFeedback
 } from '../../backend/coach';
 
+interface CoachSessionFeedbackRow {
+  id: string;
+  sessionLabel: string;
+  distance: string;
+  duration: string;
+  pace: string;
+  rpe: string;
+  fatigue: string;
+  pain: string;
+}
+
+function createSessionFeedbackRow(index: number): CoachSessionFeedbackRow {
+  return {
+    id: `session-${Date.now()}-${index}`,
+    sessionLabel: `Séance ${index + 1}`,
+    distance: '',
+    duration: '',
+    pace: '',
+    rpe: '',
+    fatigue: '',
+    pain: ''
+  };
+}
+
 export default function Coach(): JSX.Element {
   const session = getCurrentSessionUser();
   const [searchParams] = useSearchParams();
@@ -16,13 +40,9 @@ export default function Coach(): JSX.Element {
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [error, setError] = useState('');
   const [hubData, setHubData] = useState<CoachHubData | null>(null);
-  const [feedbackSessions, setFeedbackSessions] = useState('');
-  const [feedbackDistance, setFeedbackDistance] = useState('');
-  const [feedbackDuration, setFeedbackDuration] = useState('');
-  const [feedbackPace, setFeedbackPace] = useState('');
-  const [feedbackRpe, setFeedbackRpe] = useState('');
-  const [feedbackFatigue, setFeedbackFatigue] = useState('');
-  const [feedbackPain, setFeedbackPain] = useState('');
+  const [sessionFeedbackRows, setSessionFeedbackRows] = useState<CoachSessionFeedbackRow[]>([
+    createSessionFeedbackRow(0)
+  ]);
   const [feedbackGeneralFeeling, setFeedbackGeneralFeeling] = useState('');
   const [feedbackNotes, setFeedbackNotes] = useState('');
   const [readyForNextWeek, setReadyForNextWeek] = useState(true);
@@ -72,30 +92,47 @@ export default function Coach(): JSX.Element {
     event.preventDefault();
     if (!hubData?.activeProgram) return;
 
-    const sessions = feedbackSessions.trim();
-    const distance = feedbackDistance.trim();
-    const duration = feedbackDuration.trim();
-    const pace = feedbackPace.trim();
-    const rpe = feedbackRpe.trim();
-    const fatigue = feedbackFatigue.trim();
-    const pain = feedbackPain.trim();
     const generalFeeling = feedbackGeneralFeeling.trim();
     const notes = feedbackNotes.trim();
 
-    if (!sessions || !distance || !duration || !pace || !rpe || !fatigue || !pain || !generalFeeling) {
-      setError('Merci de compléter les champs essentiels du retour de semaine.');
+    if (!sessionFeedbackRows.length) {
+      setError('Ajoute au moins un retour de séance avant envoi.');
+      return;
+    }
+
+    const incompleteRow = sessionFeedbackRows.find(
+      (row) =>
+        !row.sessionLabel.trim() ||
+        !row.distance.trim() ||
+        !row.duration.trim() ||
+        !row.pace.trim() ||
+        !row.rpe.trim() ||
+        !row.fatigue.trim() ||
+        !row.pain.trim()
+    );
+    if (incompleteRow) {
+      setError('Merci de compléter tous les champs de chaque retour de séance.');
+      return;
+    }
+
+    if (!generalFeeling) {
+      setError('Renseigne tes sensations générales de la semaine.');
       return;
     }
 
     const structuredFeedback = [
       '=== RETOUR DE SEMAINE ===',
-      `Séance X: ${sessions}`,
-      `Distances: ${distance}`,
-      `Temps: ${duration}`,
-      `Rythme (min/km): ${pace}`,
-      `RPE moyen: ${rpe}`,
-      `Fatigue (1-5): ${fatigue}`,
-      `Douleurs éventuelles: ${pain}`,
+      ...sessionFeedbackRows.flatMap((row, index) => [
+        '',
+        `--- Séance ${index + 1} ---`,
+        `Séance X: ${row.sessionLabel.trim()}`,
+        `Distances: ${row.distance.trim()}`,
+        `Temps: ${row.duration.trim()}`,
+        `Rythme (min/km): ${row.pace.trim()}`,
+        `RPE moyen: ${row.rpe.trim()}`,
+        `Fatigue (1-5): ${row.fatigue.trim()}`,
+        `Douleurs éventuelles: ${row.pain.trim()}`
+      ]),
       '',
       '=== RETOUR GÉNÉRAL ===',
       `Sensations générales: ${generalFeeling}`,
@@ -116,17 +153,32 @@ export default function Coach(): JSX.Element {
       return;
     }
 
-    setFeedbackSessions('');
-    setFeedbackDistance('');
-    setFeedbackDuration('');
-    setFeedbackPace('');
-    setFeedbackRpe('');
-    setFeedbackFatigue('');
-    setFeedbackPain('');
+    setSessionFeedbackRows([createSessionFeedbackRow(0)]);
     setFeedbackGeneralFeeling('');
     setFeedbackNotes('');
     setFeedbackSuccess('Retour envoyé. Ton coach peut préparer la semaine suivante.');
     await refreshCoachData();
+  };
+
+  const addSessionFeedbackRow = (): void => {
+    setSessionFeedbackRows((prev) => [...prev, createSessionFeedbackRow(prev.length)]);
+  };
+
+  const removeSessionFeedbackRow = (id: string): void => {
+    setSessionFeedbackRows((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((row) => row.id !== id);
+    });
+  };
+
+  const updateSessionFeedbackRow = (
+    id: string,
+    key: keyof Omit<CoachSessionFeedbackRow, 'id'>,
+    value: string
+  ): void => {
+    setSessionFeedbackRows((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, [key]: value } : row))
+    );
   };
 
   return (
@@ -197,80 +249,114 @@ export default function Coach(): JSX.Element {
             Pour recevoir la semaine suivante, complète ce retour guidé sur ta semaine en cours.
           </p>
           <form className="form coach-feedback-form" onSubmit={(event) => void onSubmitFeedback(event)}>
+            <div className="coach-feedback-session-list">
+              {sessionFeedbackRows.map((row, index) => (
+                <article key={row.id} className="coach-feedback-session-card">
+                  <div className="coach-feedback-session-head">
+                    <h3>Retour séance {index + 1}</h3>
+                    {sessionFeedbackRows.length > 1 ? (
+                      <button
+                        type="button"
+                        className="coach-remove-session-btn"
+                        onClick={() => removeSessionFeedbackRow(row.id)}
+                      >
+                        Supprimer
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="coach-feedback-grid">
+                    <label>
+                      Séance X
+                      <input
+                        value={row.sessionLabel}
+                        onChange={(event) =>
+                          updateSessionFeedbackRow(row.id, 'sessionLabel', event.target.value)
+                        }
+                        placeholder="Ex: Fractionné 8x400"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Distances
+                      <input
+                        value={row.distance}
+                        onChange={(event) => updateSessionFeedbackRow(row.id, 'distance', event.target.value)}
+                        placeholder="Ex: 7.2 km"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Temps
+                      <input
+                        value={row.duration}
+                        onChange={(event) => updateSessionFeedbackRow(row.id, 'duration', event.target.value)}
+                        placeholder="Ex: 45 min"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Rythme (min/km)
+                      <input
+                        value={row.pace}
+                        onChange={(event) => updateSessionFeedbackRow(row.id, 'pace', event.target.value)}
+                        placeholder="Ex: 5:58"
+                        required
+                      />
+                    </label>
+                    <label>
+                      RPE moyen
+                      <select
+                        value={row.rpe}
+                        onChange={(event) => updateSessionFeedbackRow(row.id, 'rpe', event.target.value)}
+                        required
+                      >
+                        <option value="">Choisir</option>
+                        <option value="1">1 - Très facile</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5 - Modéré</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10 - Maximal</option>
+                      </select>
+                    </label>
+                    <label>
+                      Fatigue (1-5)
+                      <select
+                        value={row.fatigue}
+                        onChange={(event) => updateSessionFeedbackRow(row.id, 'fatigue', event.target.value)}
+                        required
+                      >
+                        <option value="">Choisir</option>
+                        <option value="1">1 - Très faible</option>
+                        <option value="2">2 - Faible</option>
+                        <option value="3">3 - Moyenne</option>
+                        <option value="4">4 - Élevée</option>
+                        <option value="5">5 - Très élevée</option>
+                      </select>
+                    </label>
+                    <label className="coach-feedback-field-full">
+                      Douleurs éventuelles
+                      <textarea
+                        value={row.pain}
+                        onChange={(event) => updateSessionFeedbackRow(row.id, 'pain', event.target.value)}
+                        className="contact-message"
+                        placeholder="Ex: gêne légère mollet droit"
+                        required
+                      />
+                    </label>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <button type="button" className="coach-add-session-btn" onClick={addSessionFeedbackRow}>
+              + Ajouter un retour de séance
+            </button>
+
             <div className="coach-feedback-grid">
-              <label>
-                Séance X
-                <input
-                  value={feedbackSessions}
-                  onChange={(event) => setFeedbackSessions(event.target.value)}
-                  placeholder="Ex: 3 séances"
-                  required
-                />
-              </label>
-              <label>
-                Distances
-                <input
-                  value={feedbackDistance}
-                  onChange={(event) => setFeedbackDistance(event.target.value)}
-                  placeholder="Ex: 24 km"
-                  required
-                />
-              </label>
-              <label>
-                Temps
-                <input
-                  value={feedbackDuration}
-                  onChange={(event) => setFeedbackDuration(event.target.value)}
-                  placeholder="Ex: 2h20"
-                  required
-                />
-              </label>
-              <label>
-                Rythme (min/km)
-                <input
-                  value={feedbackPace}
-                  onChange={(event) => setFeedbackPace(event.target.value)}
-                  placeholder="Ex: 6:05"
-                  required
-                />
-              </label>
-              <label>
-                RPE moyen
-                <select value={feedbackRpe} onChange={(event) => setFeedbackRpe(event.target.value)} required>
-                  <option value="">Choisir</option>
-                  <option value="1">1 - Très facile</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5 - Modéré</option>
-                  <option value="6">6</option>
-                  <option value="7">7</option>
-                  <option value="8">8</option>
-                  <option value="9">9</option>
-                  <option value="10">10 - Maximal</option>
-                </select>
-              </label>
-              <label>
-                Fatigue (1-5)
-                <select value={feedbackFatigue} onChange={(event) => setFeedbackFatigue(event.target.value)} required>
-                  <option value="">Choisir</option>
-                  <option value="1">1 - Très faible</option>
-                  <option value="2">2 - Faible</option>
-                  <option value="3">3 - Moyenne</option>
-                  <option value="4">4 - Élevée</option>
-                  <option value="5">5 - Très élevée</option>
-                </select>
-              </label>
-              <label className="coach-feedback-field-full">
-                Douleurs éventuelles
-                <textarea
-                  value={feedbackPain}
-                  onChange={(event) => setFeedbackPain(event.target.value)}
-                  className="contact-message"
-                  placeholder="Ex: gêne légère mollet droit après la séance 2"
-                  required
-                />
-              </label>
               <label className="coach-feedback-field-full">
                 Sensations générales
                 <textarea
