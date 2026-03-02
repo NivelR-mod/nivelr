@@ -98,10 +98,6 @@ export default function Coach(): JSX.Element {
           Le module Coach t’aide à suivre un plan progressif adapté à ton niveau. Tu commences par un test, puis ton
           programme est publié chaque semaine.
         </p>
-        <p className="coach-medical-warning">
-          Le Coach ne remplace en aucun cas un médecin. En cas de doute, douleur persistante ou antécédent médical,
-          il est impératif de consulter un professionnel de santé.
-        </p>
 
         {!session ? (
           <p className="error pseudo-error-note">Connecte-toi pour accéder à ton coaching personnalisé.</p>
@@ -146,6 +142,11 @@ export default function Coach(): JSX.Element {
             </div>
           </>
         ) : null}
+
+        <p className="coach-medical-note">
+          Le Coach ne remplace en aucun cas un médecin. En cas de doute, douleur persistante ou antécédent médical,
+          il est impératif de consulter un professionnel de santé.
+        </p>
       </article>
 
       {!loading && shouldShowFeedbackForm ? (

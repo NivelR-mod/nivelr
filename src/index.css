@@ -6490,7 +6490,7 @@ textarea::placeholder {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(150deg, rgba(7, 18, 28, 0.88), rgba(8, 15, 24, 0.9)),
+    linear-gradient(150deg, rgba(7, 18, 28, 0.66), rgba(8, 15, 24, 0.72)),
     url('/coach.jpg') center/cover no-repeat;
   border-color: rgba(114, 200, 196, 0.34) !important;
 }
@@ -6508,6 +6508,14 @@ textarea::placeholder {
   background: linear-gradient(165deg, rgba(54, 38, 18, 0.78), rgba(33, 24, 12, 0.84)) !important;
   color: #ffd7a6 !important;
   font-weight: 600;
+}
+
+.coach-medical-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem !important;
+  line-height: 1.35;
+  color: #b8ced5 !important;
+  opacity: 0.92;
 }
 
 .coach-cta-row {
