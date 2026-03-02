@@ -2,36 +2,87 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import {
+  formatRunnerArchetype,
+  formatRunnerLevel,
+  getRunnerArchetypeDescription
+} from '../../domain/runnerProfile';
+import {
+  canUseModoForCurrentSession,
   getCurrentSessionUser,
+  getSidebarStatsScopeLocal,
+  getUserContactPreferencesLocal,
   getUserSubscriptionLocal,
+  isModoEnabledLocal,
+  isRemoteAuthEnabledLocal,
+  listMarketingContactsLocal,
   signOutLocal,
+  SidebarStatsScope,
+  setSidebarStatsScopeLocal,
   updateAccountSecurityLocal,
-  updateProfileAvatarLocal,
+  updateUserContactPreferencesLocal,
   updateProfileLocal
 } from '../../backend/localAuth';
+import { getLastRemoteProgressSyncStatus, listRemoteUserProgress } from '../../backend/remoteProgress';
+import { listRemoteAppStatesForAdmin } from '../../backend/remoteAppState';
+import { RemoteUserProgressEntry } from '../../backend/types';
+import { RunnerAssessmentSnapshot } from '../../types/models';
 
-export default function Profile(): JSX.Element {
+interface ProfileProps {
+  runnerAssessment?: RunnerAssessmentSnapshot;
+  shouldPromptRunnerAssessment?: boolean;
+}
+
+export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment = false }: ProfileProps): JSX.Element {
   const navigate = useNavigate();
   const session = getCurrentSessionUser();
   const subscription = session ? getUserSubscriptionLocal(session.id) : null;
+  const isModo = isModoEnabledLocal() && canUseModoForCurrentSession();
+  const remoteAuthEnabled = isRemoteAuthEnabledLocal();
+  const contactPrefs = session ? getUserContactPreferencesLocal(session.id) : { marketingOptIn: false };
+  const [marketingOptIn, setMarketingOptIn] = useState(Boolean(contactPrefs.marketingOptIn));
   const [displayName, setDisplayName] = useState(session?.displayName ?? '');
   const [nextEmail, setNextEmail] = useState(session?.email ?? '');
+  const [currentEmailConfirm, setCurrentEmailConfirm] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [nextPassword, setNextPassword] = useState('');
   const [confirmNextPassword, setConfirmNextPassword] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
-  const [avatarMessage, setAvatarMessage] = useState('');
   const [securityMessage, setSecurityMessage] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [sidebarMessage, setSidebarMessage] = useState('');
+  const [adminMessage, setAdminMessage] = useState('');
+  const [progressRows, setProgressRows] = useState<RemoteUserProgressEntry[]>([]);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [lastSyncStatus, setLastSyncStatus] = useState(getLastRemoteProgressSyncStatus());
   const [error, setError] = useState('');
-  const [avatarCropSource, setAvatarCropSource] = useState<string | null>(null);
-  const [avatarZoom, setAvatarZoom] = useState(1);
-  const [avatarOffsetX, setAvatarOffsetX] = useState(0);
-  const [avatarOffsetY, setAvatarOffsetY] = useState(0);
+  const [isIdentityEditing, setIsIdentityEditing] = useState(false);
+  const [isSecurityEditing, setIsSecurityEditing] = useState(false);
+  const [sidebarScope, setSidebarScope] = useState<SidebarStatsScope>(
+    session ? getSidebarStatsScopeLocal(session.id) : 'WEEK'
+  );
 
   const subscriptionLabelMap: Record<string, string> = {
     FREE_S1: 'Saison 1 Gratuite',
     PREMIUM: 'Premium',
     FOUNDER: 'Founder'
+  };
+
+  const marketingContacts = isModo ? listMarketingContactsLocal() : [];
+  const consentingContacts = marketingContacts.filter((entry) => entry.marketingOptIn === true);
+
+  const buildMarketingCsv = (): string => {
+    const header = ['id', 'displayName', 'handle', 'email', 'consentEmail', 'consentAt'].join(',');
+    const lines = marketingContacts.map((entry) =>
+      [
+        entry.id,
+        `"${entry.displayName.replace(/"/g, '""')}"`,
+        `@${entry.handle}`,
+        entry.email,
+        entry.marketingOptIn ? 'oui' : 'non',
+        entry.marketingOptInAt ?? ''
+      ].join(',')
+    );
+    return [header, ...lines].join('\n');
   };
 
   if (!session) {
@@ -46,31 +97,58 @@ export default function Profile(): JSX.Element {
     );
   }
 
-  const onSave = (event: React.FormEvent<HTMLFormElement>): void => {
+  const joinedAtLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
+    new Date(session.createdAt)
+  );
+  const runnerLevelLabel = runnerAssessment ? formatRunnerLevel(runnerAssessment.result.level) : 'À déterminer';
+  const runnerArchetypeLabel = runnerAssessment ? formatRunnerArchetype(runnerAssessment.result.archetype) : 'Inconnu';
+  const maskEmail = (email: string): string => {
+    const [localRaw, domainRaw] = email.trim().toLowerCase().split('@');
+    if (!localRaw || !domainRaw) return '***@***.***';
+    const domainParts = domainRaw.split('.');
+    const ext = domainParts.length > 1 ? domainParts.pop() ?? '***' : '***';
+    const domainMain = domainParts.join('.') || domainRaw;
+    const maskPart = (input: string): string => {
+      if (input.length <= 2) return `${input.charAt(0)}*`;
+      if (input.length <= 4) return `${input.slice(0, 1)}${'*'.repeat(Math.max(1, input.length - 2))}${input.slice(-1)}`;
+      return `${input.slice(0, 2)}${'*'.repeat(Math.max(2, input.length - 4))}${input.slice(-2)}`;
+    };
+    return `${maskPart(localRaw)}@${maskPart(domainMain)}.${ext}`;
+  };
+
+  const onSave = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setError('');
     setProfileMessage('');
-    const result = updateProfileLocal(session.id, { displayName });
+    const result = await updateProfileLocal(session.id, { displayName });
     if (result.error) {
       setError(result.error);
       return;
     }
+    setDisplayName(result.user?.displayName ?? displayName);
     setProfileMessage(`Profil mis à jour. Nouveau handle: @${result.user?.handle ?? session.handle}`);
+    setIsIdentityEditing(false);
   };
 
-  const onSecuritySave = (event: React.FormEvent<HTMLFormElement>): void => {
+  const onSecuritySave = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setError('');
     setSecurityMessage('');
+    const nextEmailNormalized = nextEmail.trim().toLowerCase() || session.email;
+    const wantsEmailChange = nextEmailNormalized !== session.email;
+    if (wantsEmailChange && currentEmailConfirm.trim().toLowerCase() !== session.email.toLowerCase()) {
+      setError("L'email actuel saisi ne correspond pas à ton compte.");
+      return;
+    }
     if (nextPassword && nextPassword !== confirmNextPassword) {
       setError('La confirmation du nouveau mot de passe ne correspond pas.');
       return;
     }
 
-    const result = updateAccountSecurityLocal({
+    const result = await updateAccountSecurityLocal({
       userId: session.id,
       currentPassword,
-      nextEmail: nextEmail.trim().toLowerCase(),
+      nextEmail: nextEmailNormalized,
       nextPassword: nextPassword || undefined
     });
     if (result.error) {
@@ -81,280 +159,460 @@ export default function Profile(): JSX.Element {
     const updates: string[] = [];
     if (result.emailChanged) updates.push('email');
     if (result.passwordChanged) updates.push('mot de passe');
+    setNextEmail('');
+    setCurrentEmailConfirm('');
     setSecurityMessage(`Sécurité mise à jour (${updates.join(' + ')}).`);
     setCurrentPassword('');
     setNextPassword('');
     setConfirmNextPassword('');
+    setIsSecurityEditing(false);
   };
 
-  const onAvatarFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    if (!session) return;
+  const onContactSave = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
     setError('');
-    setAvatarMessage('');
-    const file = event.target.files?.[0];
-    event.currentTarget.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Format invalide. Utilise une image (jpg, png, webp).');
-      return;
-    }
-    if (file.size > 1.5 * 1024 * 1024) {
-      setError('Image trop lourde (max 1.5 MB).');
-      return;
-    }
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.onerror = () => reject(new Error('read_error'));
-      reader.readAsDataURL(file);
-    }).catch(() => '');
-    if (!dataUrl) {
-      setError("Impossible de lire l'image.");
-      return;
-    }
-    setAvatarZoom(1);
-    setAvatarOffsetX(0);
-    setAvatarOffsetY(0);
-    setAvatarCropSource(dataUrl);
-  };
-
-  const onRemoveAvatar = (): void => {
-    if (!session) return;
-    setError('');
-    setAvatarMessage('');
-    const result = updateProfileAvatarLocal(session.id, null);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    setAvatarMessage('Photo de profil supprimée.');
-  };
-
-  const buildCroppedAvatar = async (
-    dataUrl: string,
-    zoom: number,
-    offsetX: number,
-    offsetY: number
-  ): Promise<string | null> =>
-    new Promise((resolve) => {
-      const image = new Image();
-      image.onload = () => {
-        const width = image.naturalWidth;
-        const height = image.naturalHeight;
-        const side = Math.min(width, height);
-        const safeZoom = Math.max(1, Math.min(3, zoom));
-        const cropSize = side / safeZoom;
-
-        const centerXBase = width / 2;
-        const centerYBase = height / 2;
-        const centerX = centerXBase + (offsetX / 100) * ((width - cropSize) / 2);
-        const centerY = centerYBase + (offsetY / 100) * ((height - cropSize) / 2);
-        const sx = Math.max(0, Math.min(width - cropSize, centerX - cropSize / 2));
-        const sy = Math.max(0, Math.min(height - cropSize, centerY - cropSize / 2));
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        ctx.drawImage(image, sx, sy, cropSize, cropSize, 0, 0, 512, 512);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
-      };
-      image.onerror = () => resolve(null);
-      image.src = dataUrl;
+    setContactMessage('');
+    const result = await updateUserContactPreferencesLocal(session.id, {
+      marketingOptIn
     });
-
-  const onConfirmAvatarCrop = async (): Promise<void> => {
-    if (!session || !avatarCropSource) return;
-    setError('');
-    setAvatarMessage('');
-    const cropped = await buildCroppedAvatar(avatarCropSource, avatarZoom, avatarOffsetX, avatarOffsetY);
-    if (!cropped) {
-      setError('Recadrage impossible.');
-      return;
-    }
-    const result = updateProfileAvatarLocal(session.id, cropped);
     if (result.error) {
       setError(result.error);
       return;
     }
-    setAvatarCropSource(null);
-    setAvatarMessage('Photo de profil mise à jour.');
+    setContactMessage(
+      marketingOptIn
+        ? 'Préférences enregistrées. Tu recevras les informations NIVELR.'
+        : 'Préférences enregistrées. Tu ne recevras pas de mails d’information.'
+    );
+  };
+
+  const onSidebarSave = (event: React.FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    setError('');
+    setSidebarMessage('');
+    const result = setSidebarStatsScopeLocal(session.id, sidebarScope);
+    if (!result.ok) {
+      setError(result.error ?? 'Enregistrement impossible.');
+      return;
+    }
+    const label = sidebarScope === 'WEEK' ? 'hebdomadaire' : sidebarScope === 'MONTH' ? 'mensuelle' : 'totale';
+    setSidebarMessage(`Vue sidebar enregistrée: ${label}.`);
+  };
+
+  const onDownloadMarketingCsv = (): void => {
+    setAdminMessage('');
+    const csv = buildMarketingCsv();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'nivelr-contacts-email.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    setAdminMessage('Export CSV téléchargé.');
+  };
+
+  const onCopyMarketingEmails = async (): Promise<void> => {
+    setAdminMessage('');
+    const emails = consentingContacts.map((entry) => entry.email).join(';');
+    if (!emails) {
+      setAdminMessage('Aucun email consentant à copier.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(emails);
+      setAdminMessage(`${consentingContacts.length} emails consentants copiés.`);
+    } catch {
+      setAdminMessage('Copie impossible depuis ce navigateur.');
+    }
+  };
+
+  const onLoadRemoteProgress = async (): Promise<void> => {
+    setProgressLoading(true);
+    setLastSyncStatus(getLastRemoteProgressSyncStatus());
+    const result = await listRemoteUserProgress(500);
+    setProgressRows(result.rows);
+    setProgressLoading(false);
+    setLastSyncStatus(getLastRemoteProgressSyncStatus());
+    if (result.error) {
+      setAdminMessage(`Lecture progression impossible: ${result.error}`);
+      return;
+    }
+    setAdminMessage(
+      result.rows.length
+        ? `${result.rows.length} utilisateur(s) chargés depuis Supabase.`
+        : 'Aucune donnée distante trouvée (table user_progress vide pour le moment).'
+    );
+  };
+
+  const onExportCloudSafetyBackup = async (): Promise<void> => {
+    setAdminMessage('');
+    const result = await listRemoteAppStatesForAdmin(2000);
+    if (result.error) {
+      setAdminMessage(`Sauvegarde cloud impossible: ${result.error}`);
+      return;
+    }
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      kind: 'remote_app_state_backup_v1',
+      rows: result.rows
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `nivelr-cloud-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setAdminMessage(`Sauvegarde cloud exportée (${result.rows.length} utilisateur(s)).`);
   };
 
   return (
-    <section className="page">
-      {avatarCropSource ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <article className="card session-modal profile-crop-modal">
-            <h2>Recadrer la photo</h2>
-            <div className="profile-crop-stage">
-              <img
-                src={avatarCropSource}
-                alt="Recadrage avatar"
-                style={{
-                  transform: `translate(${avatarOffsetX}%, ${avatarOffsetY}%) scale(${avatarZoom})`
-                }}
-              />
-              <div className="profile-crop-mask" />
-            </div>
-            <div className="profile-crop-controls">
-              <label>
-                Zoom
-                <input
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.01}
-                  value={avatarZoom}
-                  onChange={(event) => setAvatarZoom(Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Décalage horizontal
-                <input
-                  type="range"
-                  min={-100}
-                  max={100}
-                  step={1}
-                  value={avatarOffsetX}
-                  onChange={(event) => setAvatarOffsetX(Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Décalage vertical
-                <input
-                  type="range"
-                  min={-100}
-                  max={100}
-                  step={1}
-                  value={avatarOffsetY}
-                  onChange={(event) => setAvatarOffsetY(Number(event.target.value))}
-                />
-              </label>
-            </div>
-            <div className="modal-actions">
-              <button type="button" onClick={() => setAvatarCropSource(null)}>
-                Annuler
-              </button>
-              <button type="button" onClick={onConfirmAvatarCrop}>
-                Enregistrer la photo
-              </button>
-            </div>
-          </article>
-        </div>
-      ) : null}
-
+    <section className="page profile-page">
       <h1>Profil</h1>
-      <p className="page-subtitle">Gère ton identité, la sécurité du compte et ton abonnement.</p>
+      <p className="page-subtitle">Ton espace compte, préférences et sécurité.</p>
 
-      <div className="list">
-        <article className="card premium-section">
-          <h2>Identité</h2>
-          <div className="profile-avatar-wrap">
-            <div className="profile-avatar-preview">
-              {session.avatarDataUrl ? (
-                <img src={session.avatarDataUrl} alt="Photo de profil" />
-              ) : (
-                <span>{(session.displayName || '?').trim().charAt(0).toUpperCase()}</span>
-              )}
+      <article className="card premium-section profile-hero-card">
+        <div className="profile-hero-main">
+          <div className="profile-hero-identity">
+            <div className="profile-avatar-preview is-large">
+              <span>{(session.displayName || '?').trim().charAt(0).toUpperCase()}</span>
             </div>
-            <div className="profile-avatar-actions">
-              <label className="btn-compact import-label profile-photo-import-btn">
-                Importer une photo
-                <input type="file" accept="image/*" onChange={onAvatarFileChange} className="import-input" />
-              </label>
-              <button type="button" className="btn-compact danger-outline" onClick={onRemoveAvatar}>
-                Supprimer la photo
-              </button>
+            <div className="profile-hero-copy">
+              <h2>{session.displayName}</h2>
+              <p>@{session.handle}</p>
+              <small>{session.email}</small>
             </div>
           </div>
-          <p className="page-subtitle">
-            Aperçu public actuel: <strong>{session.displayName || 'Ton nom'}</strong> ·{' '}
-            <strong>@{session.handle || 'ton_handle'}</strong>
-          </p>
-          <form className="form auth-form" onSubmit={onSave}>
-            <label>
-              Nom affiché
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-            </label>
-            {profileMessage ? <p className="inline-info">{profileMessage}</p> : null}
-            {avatarMessage ? <p className="inline-info">{avatarMessage}</p> : null}
-            {error ? <p className="error pseudo-error-note">{error}</p> : null}
-            <button type="submit">Enregistrer l'identité</button>
-          </form>
+          <div className="profile-hero-meta">
+            <span className="profile-meta-pill">
+              Offre: {subscription ? subscriptionLabelMap[subscription.plan] : 'Inconnue'}
+            </span>
+            <span className={`profile-meta-pill ${subscription?.status === 'ACTIVE' ? 'is-active' : ''}`}>
+              Statut: {subscription?.status === 'ACTIVE' ? 'Actif' : 'Inactif'}
+            </span>
+          </div>
+        </div>
+        <div className="profile-hero-snapshot">
+          <article className="profile-snapshot-item">
+            <p>Membre depuis</p>
+            <strong>{joinedAtLabel}</strong>
+          </article>
+          <article className="profile-snapshot-item">
+            <p>Niveau coureur</p>
+            <strong>{runnerLevelLabel}</strong>
+          </article>
+          <article className="profile-snapshot-item">
+            <p>Archetype</p>
+            <strong>{runnerArchetypeLabel}</strong>
+          </article>
+        </div>
+
+        <div className="profile-runner-summary">
+          <h3>Profil coureur</h3>
+          {runnerAssessment ? (
+            <>
+              <p className="profile-runner-headline">
+                <strong>{formatRunnerArchetype(runnerAssessment.result.archetype)}</strong> · Niveau{' '}
+                <strong>{formatRunnerLevel(runnerAssessment.result.level)}</strong>
+              </p>
+              <p className="profile-runner-explainer">{getRunnerArchetypeDescription(runnerAssessment.result.archetype)}</p>
+              <p className="profile-runner-caution">{runnerAssessment.result.caution}</p>
+              {shouldPromptRunnerAssessment ? (
+                <p className="inline-info">Un nouveau test est recommandé (plus de 30 jours).</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="page-subtitle">Questionnaire profil coureur non complété.</p>
+          )}
+        </div>
+
+        <div className="profile-quick-actions">
+          <Link to="/profil-coureur" className="btn-compact">
+            Faire / refaire le test
+          </Link>
+          <Link to="/abonnement" className="btn-compact">
+            Voir abonnement
+          </Link>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              signOutLocal();
+              navigate('/explications');
+            }}
+          >
+            Se déconnecter
+          </button>
+        </div>
+      </article>
+
+      <div className="list profile-grid profile-grid-premium">
+        <article className="card premium-section profile-card">
+          <h2>Identité</h2>
+          <div className="profile-readonly">
+            <div className="profile-readonly-row">
+              <span>Nom affiché</span>
+              <strong>{session.displayName || 'Ton nom'}</strong>
+            </div>
+            <div className="profile-readonly-row">
+              <span>Handle</span>
+              <strong>@{session.handle || 'ton_handle'}</strong>
+            </div>
+          </div>
+          <div className="goal-actions">
+            <button
+              type="button"
+              className="btn-compact profile-edit-toggle"
+              onClick={() => {
+                setError('');
+                setProfileMessage('');
+                setDisplayName(session.displayName);
+                setIsIdentityEditing((prev) => !prev);
+              }}
+            >
+              {isIdentityEditing ? "Fermer l'édition" : "Modifier l'identité"}
+            </button>
+          </div>
+          {isIdentityEditing ? (
+            <form className="form auth-form profile-edit-panel" onSubmit={onSave}>
+              <label>
+                Nom affiché
+                <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+              </label>
+              {profileMessage ? <p className="inline-info">{profileMessage}</p> : null}
+              {error ? <p className="error pseudo-error-note">{error}</p> : null}
+              <div className="goal-actions">
+                <button
+                  type="button"
+                  className="btn-compact"
+                  onClick={() => {
+                    setIsIdentityEditing(false);
+                    setDisplayName(session.displayName);
+                    setError('');
+                  }}
+                >
+                  Annuler
+                </button>
+                <button type="submit">Enregistrer l'identité</button>
+              </div>
+            </form>
+          ) : null}
         </article>
 
-        <article className="card premium-section">
+        <article className="card premium-section profile-card">
           <h2>Sécurité du compte</h2>
-          <form className="form auth-form" onSubmit={onSecuritySave}>
-            <label>
-              Email du compte
-              <input type="email" value={nextEmail} onChange={(e) => setNextEmail(e.target.value)} required />
-            </label>
-            <label>
-              Mot de passe actuel
+          <div className="profile-readonly">
+            <div className="profile-readonly-row">
+              <span>Email</span>
+              <strong>{maskEmail(session.email)}</strong>
+            </div>
+            <div className="profile-readonly-row">
+              <span>Mot de passe</span>
+              <strong>************</strong>
+            </div>
+          </div>
+          <div className="goal-actions">
+            <button
+              type="button"
+              className="btn-compact profile-edit-toggle"
+              onClick={() => {
+                setError('');
+                setSecurityMessage('');
+                setCurrentPassword('');
+                setNextPassword('');
+                setConfirmNextPassword('');
+                setNextEmail('');
+                setCurrentEmailConfirm('');
+                setIsSecurityEditing((prev) => !prev);
+              }}
+            >
+              {isSecurityEditing
+                ? "Fermer l'édition"
+                : 'Modifier les informations de sécurité personnelle'}
+            </button>
+          </div>
+          {isSecurityEditing ? (
+            <form className="form auth-form profile-edit-panel" onSubmit={onSecuritySave}>
+              <label>
+                Email du compte (masqué)
+                <input type="text" value={maskEmail(session.email)} disabled />
+              </label>
+              <label>
+                Confirme ton email actuel
+                <input
+                  type="email"
+                  value={currentEmailConfirm}
+                  onChange={(e) => setCurrentEmailConfirm(e.target.value)}
+                  placeholder="Saisis ton email actuel"
+                />
+              </label>
+              <label>
+                Nouvel email (optionnel)
+                <input
+                  type="email"
+                  value={nextEmail}
+                  onChange={(e) => setNextEmail(e.target.value)}
+                  placeholder="Laisse vide pour conserver l’email actuel"
+                />
+              </label>
+              <label>
+                Mot de passe actuel
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Nouveau mot de passe (optionnel)
+                <input
+                  type="password"
+                  value={nextPassword}
+                  onChange={(e) => setNextPassword(e.target.value)}
+                  placeholder="Laisse vide pour garder l'actuel"
+                />
+              </label>
+              <label>
+                Confirmer le nouveau mot de passe
+                <input
+                  type="password"
+                  value={confirmNextPassword}
+                  onChange={(e) => setConfirmNextPassword(e.target.value)}
+                  placeholder="Seulement si nouveau mot de passe"
+                />
+              </label>
+              {securityMessage ? <p className="inline-info">{securityMessage}</p> : null}
+              {error ? <p className="error">{error}</p> : null}
+              <div className="goal-actions">
+                <button
+                  type="button"
+                  className="btn-compact"
+                  onClick={() => {
+                    setIsSecurityEditing(false);
+                    setCurrentPassword('');
+                    setNextPassword('');
+                    setConfirmNextPassword('');
+                    setNextEmail('');
+                    setCurrentEmailConfirm('');
+                    setError('');
+                  }}
+                >
+                  Annuler
+                </button>
+                <button type="submit">Mettre à jour la sécurité</button>
+              </div>
+            </form>
+          ) : null}
+        </article>
+
+        <article className="card premium-section profile-card">
+          <h2>Communication</h2>
+          <form className="form auth-form" onSubmit={onContactSave}>
+            <label className="auth-checkbox-row">
               <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
+                type="checkbox"
+                checked={marketingOptIn}
+                onChange={(event) => setMarketingOptIn(event.target.checked)}
               />
+              <span>
+                J&apos;accepte de recevoir des emails NIVELR (infos produit, lancement de saison, nouveautés).
+              </span>
             </label>
-            <label>
-              Nouveau mot de passe (optionnel)
-              <input
-                type="password"
-                value={nextPassword}
-                onChange={(e) => setNextPassword(e.target.value)}
-                placeholder="Laisse vide pour garder l'actuel"
-              />
-            </label>
-            <label>
-              Confirmer le nouveau mot de passe
-              <input
-                type="password"
-                value={confirmNextPassword}
-                onChange={(e) => setConfirmNextPassword(e.target.value)}
-                placeholder="Seulement si nouveau mot de passe"
-              />
-            </label>
-            {securityMessage ? <p className="inline-info">{securityMessage}</p> : null}
+            <p className="page-subtitle">Tu peux modifier ce choix à tout moment.</p>
+            {contactMessage ? <p className="inline-info">{contactMessage}</p> : null}
             {error ? <p className="error">{error}</p> : null}
-            <button type="submit">Mettre à jour la sécurité</button>
+            <button type="submit">Enregistrer les préférences email</button>
           </form>
         </article>
 
-        <article className="card premium-section">
-          <h2>Abonnement</h2>
-          <p>
-            Offre actuelle: <strong>{subscription ? subscriptionLabelMap[subscription.plan] : 'Inconnue'}</strong>
-          </p>
-          <p>
-            Statut: <strong>{subscription?.status === 'ACTIVE' ? 'Actif' : 'Inactif'}</strong>
-          </p>
-          <p className="page-subtitle">
-            La saison 1 reste gratuite pendant la phase de lancement. Le premium sera proposé ensuite.
-          </p>
-          <p>
-            Voir les options: <Link to="/abonnement">ouvrir la page Abonnement</Link>
-          </p>
+        <article className="card premium-section profile-card">
+          <h2>Affichage sidebar</h2>
+          <form className="form auth-form" onSubmit={onSidebarSave}>
+            <label>
+              Résumé d’activité
+              <select
+                value={sidebarScope}
+                onChange={(event) => setSidebarScope(event.target.value as SidebarStatsScope)}
+              >
+                <option value="WEEK">Hebdomadaire</option>
+                <option value="MONTH">Mensuelle</option>
+                <option value="TOTAL">Totale</option>
+              </select>
+            </label>
+            {sidebarMessage ? <p className="inline-info">{sidebarMessage}</p> : null}
+            {error ? <p className="error">{error}</p> : null}
+            <button type="submit">Enregistrer l’affichage</button>
+          </form>
         </article>
+
+        {isModo ? (
+          <article className="card premium-section profile-card profile-card-modo">
+            <h2>Espace modérateur · contacts email</h2>
+            <p className="page-subtitle">
+              Liste locale des utilisateurs de cet appareil avec statut de consentement email.
+            </p>
+            <p>
+              Contacts consentants: <strong>{consentingContacts.length}</strong> / {marketingContacts.length}
+            </p>
+            <div className="goal-actions">
+              <button type="button" onClick={onDownloadMarketingCsv}>
+                Export CSV (statut consentement)
+              </button>
+              <button type="button" className="btn-compact" onClick={onCopyMarketingEmails}>
+                Copier les emails
+              </button>
+              {remoteAuthEnabled ? (
+                <button type="button" className="btn-compact" onClick={() => void onExportCloudSafetyBackup()}>
+                  Sauvegarde cloud (JSON)
+                </button>
+              ) : null}
+            </div>
+            {adminMessage ? <p className="inline-info">{adminMessage}</p> : null}
+            {remoteAuthEnabled ? (
+              <>
+                <div className="goal-actions">
+                  <button type="button" onClick={() => void onLoadRemoteProgress()}>
+                    Charger progression utilisateurs
+                  </button>
+                </div>
+                {progressLoading ? <p className="page-subtitle">Chargement...</p> : null}
+                <p className="page-subtitle">Dernier statut de synchro cloud: {lastSyncStatus}</p>
+                {progressRows.length ? (
+                  <div className="table-wrap">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Pseudo</th>
+                          <th>Email</th>
+                          <th>Niveau</th>
+                          <th>XP total</th>
+                          <th>Mise à jour</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {progressRows.map((row) => (
+                          <tr key={row.userId}>
+                            <td>
+                              {row.displayName} (@{row.handle})
+                            </td>
+                            <td>{row.email}</td>
+                            <td>{row.level}</td>
+                            <td>{row.xpTotal}</td>
+                            <td>{new Date(row.updatedAt).toLocaleString('fr-FR')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </article>
+        ) : null}
 
       </div>
-      <button
-        type="button"
-        className="danger"
-        onClick={() => {
-          signOutLocal();
-          navigate('/explications');
-        }}
-      >
-        Se déconnecter
-      </button>
     </section>
   );
 }

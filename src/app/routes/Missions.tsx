@@ -231,7 +231,7 @@ export default function Missions({
 
           {v1View === 'ACTIVE' ? (
             <>
-              <h2 className="section-title">Missions actives prioritaires</h2>
+              <h2 className="section-title">Missions actives</h2>
               <div className="list">
                 {activeV1Missions.map(({ mission, progressValue, status }) => (
                   <GamificationMissionCard
@@ -298,6 +298,7 @@ export default function Missions({
             progressText={progressText}
             progressRatio={progressRatio}
             tierLabel={toTierLabel(mission.tier)}
+            showTier={false}
             onClaim={onClaimMission}
           />
         ))}

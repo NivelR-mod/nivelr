@@ -7,6 +7,7 @@ interface MissionCardProps {
   progressText: string;
   progressRatio: number;
   tierLabel: 'Bronze' | 'Argent' | 'Or';
+  showTier?: boolean;
   onClaim: (missionId: string) => void;
 }
 
@@ -16,6 +17,7 @@ export default function MissionCard({
   progressText,
   progressRatio,
   tierLabel,
+  showTier = true,
   onClaim
 }: MissionCardProps): JSX.Element {
   const canClaim = status === 'DONE';
@@ -36,9 +38,9 @@ export default function MissionCard({
         <h3>{mission.title}</h3>
         <div className="mission-tags">
           <span className={`pill ${mission.type === 'WEEKLY' ? 'pill-weekly' : 'pill-oneshot'}`}>
-            {mission.type === 'WEEKLY' ? 'Hebdo' : 'One-shot'}
+            {mission.type === 'WEEKLY' ? 'Hebdo' : 'Classique'}
           </span>
-          <span className={`pill tier-pill tier-${tierLabel.toLowerCase()}`}>{tierLabel}</span>
+          {showTier ? <span className={`pill tier-pill tier-${tierLabel.toLowerCase()}`}>{tierLabel}</span> : null}
         </div>
       </div>
 

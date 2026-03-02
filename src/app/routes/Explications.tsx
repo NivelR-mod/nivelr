@@ -8,22 +8,22 @@ interface ExplicationsProps {
 const ROLE_CARDS = [
   {
     title: 'Explorateur',
-    desc: 'Varie tes séances et ouvre de nouveaux chemins.',
+    desc: 'Ancre ta progression sur la variété, l’exploration et le plaisir.',
     image: '/style-explorateur.svg'
   },
   {
     title: 'Pilier',
-    desc: 'Stabilise l’équipe avec une régularité solide.',
+    desc: 'Ancre ta progression sur une régularité solide, centrée sur toi.',
     image: '/style-pilier.svg'
   },
   {
     title: 'Stratège',
-    desc: 'Optimise tes choix pour progresser sans excès.',
+    desc: 'Ancre ta progression sur des choix structurés et maîtrisés.',
     image: '/style-stratege.svg'
   },
   {
     title: 'Performeur',
-    desc: 'Accélère sur les moments clés de la saison.',
+    desc: 'Ancre ta progression sur des temps forts ciblés et une exécution précise.',
     image: '/style-performeur.svg'
   }
 ];

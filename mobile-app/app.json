@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "NIVELR",
+    "slug": "nivelr-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0c121d"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.nivelr.mobile"
+    },
+    "android": {
+      "package": "app.nivelr.mobile"
+    },
+    "extra": {
+      "supabaseUrl": "",
+      "supabaseAnonKey": ""
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}

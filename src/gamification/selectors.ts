@@ -121,6 +121,16 @@ function resolveMissionStatus(
   rawProgressValue: number
 ): { status: MissionProgressStatus; progressValue: number } {
   const missionState = state.missionsUserProgress[mission.id];
+  const safeRaw = Math.max(0, rawProgressValue);
+  if (!missionState) {
+    if (mission.minLevel > state.userLevel.level) {
+      return { status: 'LOCKED', progressValue: 0 };
+    }
+    return {
+      status: safeRaw >= mission.criterion.target ? 'DONE' : 'IN_PROGRESS',
+      progressValue: safeRaw
+    };
+  }
   if (missionState?.status === 'CLAIMED') {
     return {
       status: 'CLAIMED',
@@ -135,14 +145,13 @@ function resolveMissionStatus(
     };
   }
 
-  const unlockBaseline = missionState?.unlockBaseline ?? rawProgressValue;
-  const relativeProgress = missionState?.progressValue ?? Math.max(0, rawProgressValue - unlockBaseline);
-
-  if (relativeProgress >= mission.criterion.target) {
-    return { status: 'DONE', progressValue: relativeProgress };
+  // Progression absolue: une mission reflète toujours l'état réel courant.
+  // On évite ainsi les compteurs figés à 0/x à cause d'anciennes baselines.
+  if (safeRaw >= mission.criterion.target) {
+    return { status: 'DONE', progressValue: safeRaw };
   }
 
-  return { status: 'IN_PROGRESS', progressValue: relativeProgress };
+  return { status: 'IN_PROGRESS', progressValue: safeRaw };
 }
 
 export function getMissionsForUi(

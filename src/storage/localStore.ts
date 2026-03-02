@@ -1,7 +1,19 @@
-import { AppState, GoalConfig, Session, SessionFeelings, SessionInput, SportType } from '../types/models';
+import {
+  AppState,
+  GoalConfig,
+  RunnerAssessmentAnswers,
+  RunnerAssessmentResult,
+  RunnerAssessmentSnapshot,
+  Session,
+  SessionFeelings,
+  SessionInput,
+  SportType
+} from '../types/models';
+import { scopedStorageKey } from './userScope';
 
-const STORAGE_KEY = 'sport-mvp-state-v1';
-const SNAPSHOTS_KEY = 'sport-mvp-snapshots-v1';
+const STORAGE_KEY_BASE = 'sport-mvp-state-v1';
+const SNAPSHOTS_KEY_BASE = 'sport-mvp-snapshots-v1';
+const LEGACY_MIGRATION_KEY = 'sport-mvp-state-v1-migrated';
 const SNAPSHOT_LIMIT = 7;
 
 export const DEFAULT_GOALS: GoalConfig = {
@@ -132,6 +144,128 @@ function sanitizeSession(value: unknown): Session | null {
   };
 }
 
+function sanitizeRunnerAssessmentResult(value: unknown): RunnerAssessmentResult | null {
+  const raw = value as Partial<RunnerAssessmentResult> | undefined;
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.score !== 'number' || !Number.isFinite(raw.score)) return null;
+  if (typeof raw.level !== 'string' || typeof raw.focus !== 'string') return null;
+  if (!Array.isArray(raw.recommendations)) return null;
+  if (typeof raw.caution !== 'string') return null;
+  if (typeof raw.answeredAt !== 'string' || typeof raw.nextRecommendedAt !== 'string') return null;
+
+  const levelValues: RunnerAssessmentResult['level'][] = ['DEBUTANT_REPRISE', 'REGULIER', 'CONFIRME'];
+  const focusValues: RunnerAssessmentResult['focus'][] = [
+    'ROUTINE',
+    'EXPLORATION',
+    'PROGRESSION',
+    'PERFORMANCE',
+    'SANTE'
+  ];
+  const archetypeValues: RunnerAssessmentResult['archetype'][] = [
+    'EXPLORATEUR',
+    'PILIER',
+    'STRATEGE',
+    'PERFORMEUR'
+  ];
+  if (!levelValues.includes(raw.level as RunnerAssessmentResult['level'])) return null;
+  if (!focusValues.includes(raw.focus as RunnerAssessmentResult['focus'])) return null;
+  const derivedArchetype = (() => {
+    if (raw.focus === 'EXPLORATION') return 'EXPLORATEUR';
+    if (raw.focus === 'ROUTINE') return 'PILIER';
+    if (raw.focus === 'PERFORMANCE') return 'PERFORMEUR';
+    return 'STRATEGE';
+  })();
+
+  return {
+    score: Math.max(0, Math.min(100, Math.round(raw.score))),
+    level: raw.level as RunnerAssessmentResult['level'],
+    focus: raw.focus as RunnerAssessmentResult['focus'],
+    archetype: archetypeValues.includes(raw.archetype as RunnerAssessmentResult['archetype'])
+      ? (raw.archetype as RunnerAssessmentResult['archetype'])
+      : derivedArchetype,
+    recommendations: raw.recommendations.filter((item): item is string => typeof item === 'string').slice(0, 10),
+    caution: raw.caution,
+    answeredAt: raw.answeredAt,
+    nextRecommendedAt: raw.nextRecommendedAt
+  };
+}
+
+function sanitizeRunnerAssessmentAnswers(value: unknown): RunnerAssessmentAnswers | null {
+  const raw = value as Partial<RunnerAssessmentAnswers> | undefined;
+  if (!raw || typeof raw !== 'object') return null;
+  const requiredSingle: Array<
+    keyof Pick<
+      RunnerAssessmentAnswers,
+      | 'consistencyMonths'
+      | 'sessionsPerWeek'
+      | 'weeklyKm'
+      | 'longestRecentRun'
+      | 'easyPaceTalk'
+      | 'injuryLast6Months'
+      | 'usualRecovery'
+      | 'availableDays'
+    >
+  > = [
+    'consistencyMonths',
+    'sessionsPerWeek',
+    'weeklyKm',
+    'longestRecentRun',
+    'easyPaceTalk',
+    'injuryLast6Months',
+    'usualRecovery',
+    'availableDays'
+  ];
+  for (const key of requiredSingle) {
+    if (typeof raw[key] !== 'string') return null;
+  }
+
+  const objectiveValues: RunnerAssessmentAnswers['objective8Weeks'][number][] = [
+    'REPRISE_REGULARITE',
+    'FORME_GENERALE',
+    'PREPA_COURSE',
+    'PERFORMANCE',
+    'SANTE_POIDS'
+  ];
+  const motivationValues: RunnerAssessmentAnswers['motivation'][number][] = [
+    'ROUTINE',
+    'VARIER',
+    'DEPASSEMENT',
+    'STRUCTUREE'
+  ];
+
+  const sanitizeArray = <T extends string>(candidate: unknown, allowed: T[], fallback: T): T[] => {
+    if (Array.isArray(candidate)) {
+      const filtered = candidate.filter((item): item is T => typeof item === 'string' && allowed.includes(item as T));
+      return filtered.length ? Array.from(new Set(filtered)) : [fallback];
+    }
+    if (typeof candidate === 'string' && allowed.includes(candidate as T)) return [candidate as T];
+    return [fallback];
+  };
+
+  return {
+    consistencyMonths: raw.consistencyMonths as RunnerAssessmentAnswers['consistencyMonths'],
+    sessionsPerWeek: raw.sessionsPerWeek as RunnerAssessmentAnswers['sessionsPerWeek'],
+    weeklyKm: raw.weeklyKm as RunnerAssessmentAnswers['weeklyKm'],
+    longestRecentRun: raw.longestRecentRun as RunnerAssessmentAnswers['longestRecentRun'],
+    easyPaceTalk: raw.easyPaceTalk as RunnerAssessmentAnswers['easyPaceTalk'],
+    injuryLast6Months: raw.injuryLast6Months as RunnerAssessmentAnswers['injuryLast6Months'],
+    objective8Weeks: sanitizeArray(raw.objective8Weeks, objectiveValues, 'REPRISE_REGULARITE'),
+    usualRecovery: raw.usualRecovery as RunnerAssessmentAnswers['usualRecovery'],
+    availableDays: raw.availableDays as RunnerAssessmentAnswers['availableDays'],
+    motivation: sanitizeArray(raw.motivation, motivationValues, 'ROUTINE')
+  };
+}
+
+function sanitizeRunnerAssessment(value: unknown): RunnerAssessmentSnapshot | undefined {
+  const raw = value as Partial<RunnerAssessmentSnapshot> | undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  if (typeof raw.appliedAt !== 'string') return undefined;
+  const answers = sanitizeRunnerAssessmentAnswers(raw.answers);
+  const result = sanitizeRunnerAssessmentResult(raw.result);
+  if (!answers || !result) return undefined;
+  return { answers, result, appliedAt: raw.appliedAt };
+}
+
 export function normalizeState(input: unknown): AppState {
   const parsed = input as Partial<AppState> | undefined;
   const safeParsed = parsed ?? {};
@@ -153,7 +287,8 @@ export function normalizeState(input: unknown): AppState {
       ? safeParsed.weeklyClaimedMissions.filter((id): id is string => typeof id === 'string')
       : [],
     missionWeekKey: asString(safeParsed.missionWeekKey) ?? defaultState.missionWeekKey,
-    goals: sanitizeGoals(safeParsed.goals)
+    goals: sanitizeGoals(safeParsed.goals),
+    runnerAssessment: sanitizeRunnerAssessment(safeParsed.runnerAssessment)
   };
 
   const currentWeek = getCurrentWeekKey();
@@ -167,7 +302,8 @@ export function normalizeState(input: unknown): AppState {
 
 export function loadState(): AppState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const storageKey = scopedStorageKey(STORAGE_KEY_BASE);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return createDefaultState();
     return normalizeState(JSON.parse(raw));
   } catch {
@@ -176,12 +312,14 @@ export function loadState(): AppState {
 }
 
 export function saveState(state: AppState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const storageKey = scopedStorageKey(STORAGE_KEY_BASE);
+  localStorage.setItem(storageKey, JSON.stringify(state));
   persistDailySnapshot(state);
 }
 
 export function resetState(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  const storageKey = scopedStorageKey(STORAGE_KEY_BASE);
+  localStorage.removeItem(storageKey);
 }
 
 interface StateSnapshot {
@@ -198,7 +336,8 @@ function getDayKey(date: Date = new Date()): string {
 
 function loadSnapshots(): StateSnapshot[] {
   try {
-    const raw = localStorage.getItem(SNAPSHOTS_KEY);
+    const snapshotsKey = scopedStorageKey(SNAPSHOTS_KEY_BASE);
+    const raw = localStorage.getItem(snapshotsKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as StateSnapshot[];
     if (!Array.isArray(parsed)) return [];
@@ -214,8 +353,36 @@ function loadSnapshots(): StateSnapshot[] {
 }
 
 function saveSnapshots(snapshots: StateSnapshot[]): void {
-  localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(snapshots.slice(-SNAPSHOT_LIMIT)));
+  const snapshotsKey = scopedStorageKey(SNAPSHOTS_KEY_BASE);
+  localStorage.setItem(snapshotsKey, JSON.stringify(snapshots.slice(-SNAPSHOT_LIMIT)));
 }
+
+function migrateLegacyStateIfNeeded(): void {
+  try {
+    if (localStorage.getItem(LEGACY_MIGRATION_KEY) === '1') return;
+    const storageKey = scopedStorageKey(STORAGE_KEY_BASE);
+    const snapshotsKey = scopedStorageKey(SNAPSHOTS_KEY_BASE);
+    if (!localStorage.getItem(storageKey)) {
+      const legacyRaw = localStorage.getItem(STORAGE_KEY_BASE);
+      if (legacyRaw) {
+        localStorage.setItem(storageKey, legacyRaw);
+      }
+    }
+    if (!localStorage.getItem(snapshotsKey)) {
+      const legacySnapshotsRaw = localStorage.getItem(SNAPSHOTS_KEY_BASE);
+      if (legacySnapshotsRaw) {
+        localStorage.setItem(snapshotsKey, legacySnapshotsRaw);
+      }
+    }
+    localStorage.removeItem(STORAGE_KEY_BASE);
+    localStorage.removeItem(SNAPSHOTS_KEY_BASE);
+    localStorage.setItem(LEGACY_MIGRATION_KEY, '1');
+  } catch {
+    // no-op
+  }
+}
+
+migrateLegacyStateIfNeeded();
 
 function persistDailySnapshot(state: AppState): void {
   const snapshots = loadSnapshots();

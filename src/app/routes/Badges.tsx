@@ -1,5 +1,6 @@
 import { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { GamificationState, MissionProgressStatus } from '../../gamification/types';
+import { getCurrentSessionUser } from '../../backend/localAuth';
 
 type MissionUiItem = {
   mission: import('../../gamification/types').GamificationMission;
@@ -24,6 +25,7 @@ interface BadgeItem {
 }
 
 const CUSTOM_BADGE_BASE = '/badges/custom';
+const FULL_TEAM_SIZE = 4;
 const CUSTOM_BADGES = {
   bronze: `${CUSTOM_BADGE_BASE}/Badge_bronze.png`,
   silver: `${CUSTOM_BADGE_BASE}/Badge_argent.png`,
@@ -41,7 +43,8 @@ const CUSTOM_BADGES = {
   niv15: `${CUSTOM_BADGE_BASE}/Badge_niv15.png`,
   niv20: `${CUSTOM_BADGE_BASE}/Badge_niv20.png`,
   niv25: `${CUSTOM_BADGE_BASE}/Badge_niv25.png`,
-  niv30: `${CUSTOM_BADGE_BASE}/Badge_niv30.png`
+  niv30: `${CUSTOM_BADGE_BASE}/Badge_niv30.png`,
+  weeklyMissions: `${CUSTOM_BADGE_BASE}/Missions_hebdo.png`
 } as const;
 
 function badgeFromTier(
@@ -103,6 +106,8 @@ export default function Badges({
   gamificationMissions,
   level
 }: BadgesProps): JSX.Element {
+  const sessionUser = getCurrentSessionUser();
+  const currentUserId = sessionUser?.id ?? gamificationState.userId;
   const [revealedBadgeIds, setRevealedBadgeIds] = useState<Set<string>>(new Set());
   const [newBadgeIds, setNewBadgeIds] = useState<Set<string>>(new Set());
   const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(null);
@@ -113,15 +118,25 @@ export default function Badges({
   const seasonId = currentSeason?.id ?? '';
   const hasTeamMembership = gamificationState.ascension.teamMembers.some(
     (member) =>
-      member.userId === gamificationState.userId &&
+      member.userId === currentUserId &&
       member.seasonId === seasonId &&
-      member.leftAt === null
+      member.leftAt == null
   );
-  const isTeamOwner = gamificationState.ascension.teams.some(
-    (team) => team.seasonId === seasonId && team.ownerUserId === gamificationState.userId
+  const ownedTeamsInSeason = gamificationState.ascension.teams.filter(
+    (team) => team.seasonId === seasonId && team.ownerUserId === currentUserId
   );
+  const isTeamOwner = ownedTeamsInSeason.length > 0;
+  const hasCreatedFullTeam = ownedTeamsInSeason.some((team) => {
+    const activeMembers = gamificationState.ascension.teamMembers.filter(
+      (member) => member.seasonId === seasonId && member.teamId === team.id && member.leftAt == null
+    );
+    return activeMembers.length >= FULL_TEAM_SIZE;
+  });
   const reachedMilestones = new Set(currentSeason?.milestoneReached ?? []);
   const seasonStarted = currentSeason ? currentSeason.status !== 'UPCOMING' : false;
+  const weeklyMissionsClaimed = gamificationState.userXpLog.filter(
+    (entry) => entry.reason === 'MISSION_CLAIM' && entry.sourceRef.startsWith('legacy-mission:weekly-')
+  ).length;
 
   const coreBadges: BadgeItem[] = [
     badgeFromTier(
@@ -151,7 +166,16 @@ export default function Badges({
       'Valider toutes les missions Platine.',
       'PLATINUM',
       gamificationMissions
-    )
+    ),
+    {
+      id: 'weekly-missions-50',
+      title: 'Missions hebdo',
+      description: 'Valider 50 missions hebdomadaires.',
+      unlocked: weeklyMissionsClaimed >= 50,
+      progressText: `${Math.min(weeklyMissionsClaimed, 50)}/50 missions`,
+      tone: 'season',
+      art: CUSTOM_BADGES.weeklyMissions
+    }
   ];
 
   const seasonBadges: BadgeItem[] = [
@@ -165,8 +189,8 @@ export default function Badges({
     },
     {
       id: 'season-1-team',
-      title: 'Equipe engagee',
-      description: 'Creer ou rejoindre une equipe saisonniere.',
+      title: 'Rejoindre une équipe',
+      description: 'Rejoindre une équipe saisonnière.',
       unlocked: hasTeamMembership,
       tone: 'season',
       art: CUSTOM_BADGES.equipe
@@ -174,8 +198,8 @@ export default function Badges({
     {
       id: 'season-1-founder',
       title: 'Capitaine',
-      description: 'Creer ton equipe pour la Saison 1.',
-      unlocked: isTeamOwner,
+      description: 'Créer une équipe complète (4/4) pendant la Saison 1.',
+      unlocked: isTeamOwner && hasCreatedFullTeam,
       tone: 'season',
       art: CUSTOM_BADGES.capitaine
     },
@@ -226,7 +250,7 @@ export default function Badges({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const storageKey = `nivelr_badges_seen_${gamificationState.userId}`;
+    const storageKey = `nivelr_badges_seen_${currentUserId}`;
     const raw = window.localStorage.getItem(storageKey);
     const previouslySeen = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
     const newlyUnlocked = unlockedBadgeIds.filter((id) => !previouslySeen.has(id));
@@ -239,7 +263,7 @@ export default function Badges({
       return () => window.clearTimeout(timeoutId);
     }
     return undefined;
-  }, [gamificationState.userId, unlockedBadgeIds]);
+  }, [currentUserId, unlockedBadgeIds]);
 
   const unlockedCount = allBadges.filter((badge) => badge.unlocked).length;
   const completionPct = allBadges.length ? Math.round((unlockedCount / allBadges.length) * 100) : 0;

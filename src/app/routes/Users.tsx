@@ -1,20 +1,20 @@
-import { useMemo, useState } from 'react';
-import { BACKEND_FLAGS } from '../../backend/config';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  addFriendDirectLocal,
-  cancelOutgoingContactRequestLocal,
+  addFriendDirect,
+  cancelOutgoingContactRequest,
   createFakeUsersLocal,
   getCurrentSessionUser,
   isFakeCommunityUser,
-  listLocalUsers,
+  listContactRequestsForUserAsync,
   listFakeUsersLocal,
-  listContactRequestsForUser,
+  listUsersSocial,
   purgeFakeUsersLocal,
-  removeFriendLocal,
-  respondToContactRequestLocal,
-  searchUsersLocal,
-  sendContactRequestLocal
+  removeFriend,
+  respondToContactRequest,
+  searchUsersSocial,
+  sendContactRequest
 } from '../../backend/localAuth';
+import { AuthSessionUser, ContactRequest } from '../../backend/types';
 
 interface UsersProps {
   isModoEnabled: boolean;
@@ -36,7 +36,40 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<CommunityTab>('FRIENDS');
   const [refreshTick, setRefreshTick] = useState(0);
   const [pendingRemoveFriendId, setPendingRemoveFriendId] = useState<string | null>(null);
-  const usersCatalog = useMemo(() => listLocalUsers(), [refreshTick]);
+  const [usersCatalog, setUsersCatalog] = useState<AuthSessionUser[]>([]);
+  const [results, setResults] = useState<AuthSessionUser[]>([]);
+  const [contacts, setContacts] = useState<{ incoming: ContactRequest[]; outgoing: ContactRequest[] }>({
+    incoming: [],
+    outgoing: []
+  });
+
+  const fakeUsers = useMemo(() => (isModoEnabled ? listFakeUsersLocal() : []), [isModoEnabled, refreshTick]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async (): Promise<void> => {
+      if (!session) {
+        setUsersCatalog([]);
+        setResults([]);
+        setContacts({ incoming: [], outgoing: [] });
+        return;
+      }
+      const [catalog, discovered, contactState] = await Promise.all([
+        listUsersSocial({ includeFakeUsers: isModoEnabled }),
+        searchUsersSocial(query, session.id, { includeFakeUsers: isModoEnabled }),
+        listContactRequestsForUserAsync(session.id)
+      ]);
+      if (cancelled) return;
+      setUsersCatalog(catalog);
+      setResults(discovered);
+      setContacts(contactState);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id, query, isModoEnabled, refreshTick]);
+
   const userById = useMemo(
     () =>
       new Map(
@@ -50,12 +83,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
       ),
     [usersCatalog]
   );
-  const results = useMemo(
-    () => searchUsersLocal(query, session?.id, { includeFakeUsers: isModoEnabled }),
-    [query, session?.id, isModoEnabled, refreshTick]
-  );
-  const fakeUsers = useMemo(() => (isModoEnabled ? listFakeUsersLocal() : []), [isModoEnabled, refreshTick]);
-  const contacts = session ? listContactRequestsForUser(session.id) : { incoming: [], outgoing: [] };
+
   const hiddenInSearchIds = useMemo(() => {
     if (!session) return new Set<string>();
     const ids = new Set<string>();
@@ -66,10 +94,12 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
     }
     return ids;
   }, [contacts.incoming, contacts.outgoing, session]);
+
   const filteredResults = useMemo(
     () => results.filter((user) => !hiddenInSearchIds.has(user.id)),
     [results, hiddenInSearchIds]
   );
+
   const friends = useMemo(() => {
     if (!session) return [];
     const accepted = [...contacts.incoming, ...contacts.outgoing].filter((item) => item.status === 'ACCEPTED');
@@ -83,6 +113,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
     }
     return Array.from(friendIds);
   }, [contacts.incoming, contacts.outgoing, session]);
+
   const incomingPending = useMemo(
     () => contacts.incoming.filter((item) => item.status === 'PENDING'),
     [contacts.incoming]
@@ -97,40 +128,43 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
     if (!identity) return 'Utilisateur inconnu';
     return `${identity.displayName} (@${identity.handle})`;
   };
+
   const getInitial = (userId: string): string => {
     const identity = userById.get(userId);
     const source = (identity?.displayName || identity?.handle || '?').trim();
     return source.charAt(0).toUpperCase();
   };
 
-  const onSendRequest = (targetUserId: string): void => {
+  const onSendRequest = async (targetUserId: string): Promise<void> => {
     if (!session) {
       setError('Connecte-toi pour envoyer une demande.');
       return;
     }
-    const result = sendContactRequestLocal(session.id, targetUserId);
+    const result = await sendContactRequest(session.id, targetUserId);
     if (!result.ok) {
       setError(result.error ?? 'Impossible d’envoyer la demande.');
       return;
     }
     setError('');
     setMessage("Demande d'ami envoyée.");
+    setRefreshTick((value) => value + 1);
   };
 
-  const onRespond = (requestId: string, decision: 'ACCEPTED' | 'DECLINED'): void => {
+  const onRespond = async (requestId: string, decision: 'ACCEPTED' | 'DECLINED'): Promise<void> => {
     if (!session) return;
-    const result = respondToContactRequestLocal(requestId, session.id, decision);
+    const result = await respondToContactRequest(requestId, session.id, decision);
     if (!result.ok) {
       setError(result.error ?? 'Action impossible.');
       return;
     }
     setError('');
     setMessage(decision === 'ACCEPTED' ? "Demande d'ami acceptée." : "Demande d'ami refusée.");
+    setRefreshTick((value) => value + 1);
   };
 
-  const onAddFriendDirect = (targetUserId: string): void => {
+  const onAddFriendDirect = async (targetUserId: string): Promise<void> => {
     if (!session) return;
-    const result = addFriendDirectLocal(session.id, targetUserId);
+    const result = await addFriendDirect(session.id, targetUserId);
     if (!result.ok) {
       setError(result.error ?? 'Ajout direct impossible.');
       return;
@@ -140,9 +174,9 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
     setRefreshTick((value) => value + 1);
   };
 
-  const onCancelOutgoingRequest = (requestId: string): void => {
+  const onCancelOutgoingRequest = async (requestId: string): Promise<void> => {
     if (!session) return;
-    const result = cancelOutgoingContactRequestLocal(requestId, session.id);
+    const result = await cancelOutgoingContactRequest(requestId, session.id);
     if (!result.ok) {
       setError(result.error ?? "Annulation de la demande impossible.");
       return;
@@ -152,9 +186,9 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
     setRefreshTick((value) => value + 1);
   };
 
-  const onRemoveFriend = (friendId: string): void => {
+  const onRemoveFriend = async (friendId: string): Promise<void> => {
     if (!session) return;
-    const result = removeFriendLocal(session.id, friendId);
+    const result = await removeFriend(session.id, friendId);
     if (!result.ok) {
       setError(result.error ?? "Suppression de l'ami impossible.");
       return;
@@ -204,8 +238,8 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
           <article className="card session-modal">
             <h2>Retirer un ami</h2>
             <p>
-              Confirmer la suppression de{' '}
-              <strong>{formatUserIdentity(pendingRemoveFriendId)}</strong> de ta liste d&apos;amis ?
+              Confirmer la suppression de <strong>{formatUserIdentity(pendingRemoveFriendId)}</strong> de ta liste
+              d&apos;amis ?
             </p>
             <div className="modal-actions">
               <button type="button" onClick={() => setPendingRemoveFriendId(null)}>
@@ -215,7 +249,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                 type="button"
                 className="danger"
                 onClick={() => {
-                  onRemoveFriend(pendingRemoveFriendId);
+                  void onRemoveFriend(pendingRemoveFriendId);
                   setPendingRemoveFriendId(null);
                 }}
               >
@@ -227,10 +261,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
       ) : null}
 
       <h1>Utilisateurs</h1>
-      <p className="page-subtitle">
-        Ajoute des amis pour simplifier tes futures invitations d'équipe saison. Social actif:{' '}
-        <strong>{String(BACKEND_FLAGS.socialEnabled)}</strong>
-      </p>
+      <p className="page-subtitle">Ajoute des amis pour simplifier tes futures invitations d'équipe saison.</p>
       <div className="community-tabs">
         <button
           type="button"
@@ -331,16 +362,22 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                         <span className="community-avatar">{getInitial(item.requesterUserId)}</span>
                         <div>
                           <p>{formatUserIdentity(item.requesterUserId)}</p>
-                          <small className="community-status-tag">
-                            {CONTACT_STATUS_LABEL[item.status]}
-                          </small>
+                          <small className="community-status-tag">{CONTACT_STATUS_LABEL[item.status]}</small>
                         </div>
                       </div>
                       <div className="community-user-actions">
-                        <button type="button" className="btn-compact" onClick={() => onRespond(item.id, 'ACCEPTED')}>
+                        <button
+                          type="button"
+                          className="btn-compact"
+                          onClick={() => void onRespond(item.id, 'ACCEPTED')}
+                        >
                           Accepter
                         </button>
-                        <button type="button" className="btn-compact danger-outline" onClick={() => onRespond(item.id, 'DECLINED')}>
+                        <button
+                          type="button"
+                          className="btn-compact danger-outline"
+                          onClick={() => void onRespond(item.id, 'DECLINED')}
+                        >
                           Refuser
                         </button>
                       </div>
@@ -359,9 +396,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                         <span className="community-avatar">{getInitial(item.targetUserId)}</span>
                         <div>
                           <p>{formatUserIdentity(item.targetUserId)}</p>
-                          <small className="community-status-tag">
-                            {CONTACT_STATUS_LABEL[item.status]}
-                          </small>
+                          <small className="community-status-tag">{CONTACT_STATUS_LABEL[item.status]}</small>
                         </div>
                       </div>
                       <div className="community-user-actions">
@@ -369,7 +404,7 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                           <button
                             type="button"
                             className="btn-compact danger-outline"
-                            onClick={() => onCancelOutgoingRequest(item.id)}
+                            onClick={() => void onCancelOutgoingRequest(item.id)}
                           >
                             Annuler
                           </button>
@@ -393,7 +428,6 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                   placeholder="@handle ou pseudo"
                 />
               </label>
-              {filteredResults.length === 0 ? <p>Aucun résultat.</p> : null}
               <div className="community-card-grid">
                 {filteredResults.map((user) => (
                   <article key={user.id} className="community-user-card">
@@ -408,11 +442,15 @@ export default function Users({ isModoEnabled }: UsersProps): JSX.Element {
                       </div>
                     </div>
                     <div className="community-user-actions">
-                      <button type="button" className="btn-compact" onClick={() => onSendRequest(user.id)}>
+                      <button type="button" className="btn-compact" onClick={() => void onSendRequest(user.id)}>
                         Ajouter en ami
                       </button>
                       {isModoEnabled ? (
-                        <button type="button" className="btn-compact" onClick={() => onAddFriendDirect(user.id)}>
+                        <button
+                          type="button"
+                          className="btn-compact"
+                          onClick={() => void onAddFriendDirect(user.id)}
+                        >
                           Ajouter direct (modo)
                         </button>
                       ) : null}

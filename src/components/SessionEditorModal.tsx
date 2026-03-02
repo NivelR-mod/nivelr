@@ -9,6 +9,7 @@ interface SessionEditorModalProps {
 }
 
 interface FormState {
+  sessionDate: string;
   sportType: SportType;
   subtype: string;
   durationMin: string;
@@ -24,7 +25,11 @@ export default function SessionEditorModal({
   onClose,
   onSave
 }: SessionEditorModalProps): JSX.Element {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const minDateIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   const [form, setForm] = useState<FormState>({
+    sessionDate: new Date(session.createdAt).toISOString().slice(0, 10),
     sportType: session.sportType,
     subtype: session.subtype,
     durationMin: String(session.durationMin),
@@ -48,8 +53,17 @@ export default function SessionEditorModal({
     const feltState = Number(form.feltState);
     const rpe = Number(form.rpe);
     const fatigue = Number(form.fatigue);
+    const selectedDate = new Date(`${form.sessionDate}T12:00:00`);
+    const now = new Date();
+    const minAllowed = new Date(now);
+    minAllowed.setDate(minAllowed.getDate() - 7);
+    minAllowed.setHours(0, 0, 0, 0);
+    now.setHours(23, 59, 59, 999);
 
     if (!Number.isFinite(duration) || duration <= 0) return 'La durée doit être > 0.';
+    if (!form.sessionDate || Number.isNaN(selectedDate.getTime())) return 'Date de séance invalide.';
+    if (selectedDate.getTime() < minAllowed.getTime()) return 'Modification limitée à J-7 maximum.';
+    if (selectedDate.getTime() > now.getTime()) return 'La date ne peut pas être dans le futur.';
     if (form.distanceKm && (!Number.isFinite(distance) || (distance ?? 0) < 0)) {
       return 'La distance doit être vide ou positive.';
     }
@@ -85,10 +99,14 @@ export default function SessionEditorModal({
       },
       comment: form.comment.trim() || undefined
     };
+    const existingDate = new Date(session.createdAt);
+    const nextDate = new Date(`${form.sessionDate}T12:00:00`);
+    existingDate.setFullYear(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
 
     onSave({
       ...session,
       ...input,
+      createdAt: existingDate.toISOString(),
       xp: computeSessionXp(input)
     });
   };
@@ -97,6 +115,18 @@ export default function SessionEditorModal({
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <form className="card session-modal" onSubmit={handleSave}>
         <h2>Modifier la séance</h2>
+
+        <label>
+          Date de séance
+          <input
+            type="date"
+            min={minDateIso}
+            max={todayIso}
+            value={form.sessionDate}
+            onChange={(event) => setField('sessionDate', event.target.value)}
+            required
+          />
+        </label>
 
         <label>
           Sport

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import Home from './app/routes/Home';
 import Sessions from './app/routes/Sessions';
 import AddSession from './app/routes/AddSession';
@@ -14,15 +14,31 @@ import Profile from './app/routes/Profile';
 import Subscription from './app/routes/Subscription';
 import Users from './app/routes/Users';
 import Badges from './app/routes/Badges';
+import LegalMentions from './app/routes/LegalMentions';
+import PrivacyPolicy from './app/routes/PrivacyPolicy';
+import CookiesPolicy from './app/routes/CookiesPolicy';
+import TermsOfUse from './app/routes/TermsOfUse';
+import ContactLegal from './app/routes/ContactLegal';
+import RunnerAssessment from './app/routes/RunnerAssessment';
 import {
+  canUseModoForCurrentSession,
   getCurrentSessionUser,
+  getSidebarStatsScopeLocal,
+  initAuthProviderSession,
+  isModoAdminEmail,
+  isRemoteAuthEnabledLocal,
+  listContactRequestsForUserAsync,
   LOCAL_AUTH_CHANGED_EVENT,
+  subscribeRemoteAuthState,
   setModoEnabledLocal
 } from './backend/localAuth';
+import { syncCurrentUserProgressRemote } from './backend/remoteProgress';
+import { loadRemoteAppState, saveRemoteAppState } from './backend/remoteAppState';
 import { getMissions, getMissionStatus } from './domain/missions';
 import { getLevelFromXp, getXpToNextLevel } from './domain/levels';
 import { createSession } from './domain/sessions';
 import Toast, { ToastKind } from './components/Toast';
+import CookieConsentModal from './components/CookieConsentModal';
 import {
   createDefaultState,
   getCurrentWeekKey,
@@ -33,6 +49,7 @@ import {
   saveState
 } from './storage/localStore';
 import { AppState, GoalConfig, Session, SessionInput } from './types/models';
+import { formatRunnerArchetype, shouldSuggestReassessment } from './domain/runnerProfile';
 import { GAMIFICATION_V1_ENABLED } from './gamification/config';
 import {
   apiDeleteSessionValidated,
@@ -154,6 +171,58 @@ function getUnlockContent(level: number): UnlockContent {
   };
 }
 
+function bindGamificationStateToUser(
+  input: GamificationState,
+  targetUserId: string | null | undefined
+): GamificationState {
+  const nextUserId = (targetUserId ?? '').trim();
+  if (!nextUserId || input.userId === nextUserId) return input;
+  const previousUserId = input.userId;
+  const remap = (id: string): string => (id === previousUserId ? nextUserId : id);
+
+  const missionsUserProgress = Object.fromEntries(
+    Object.entries(input.missionsUserProgress).map(([missionId, progress]) => [
+      missionId,
+      { ...progress, userId: remap(progress.userId) }
+    ])
+  );
+
+  return {
+    ...input,
+    userId: nextUserId,
+    userLevel: { ...input.userLevel, userId: remap(input.userLevel.userId) },
+    userStreak: { ...input.userStreak, userId: remap(input.userStreak.userId) },
+    userXpLog: input.userXpLog.map((entry) => ({ ...entry, userId: remap(entry.userId) })),
+    weeklyStats: input.weeklyStats.map((entry) => ({ ...entry, userId: remap(entry.userId) })),
+    userMonthlyChallenges: input.userMonthlyChallenges.map((entry) => ({
+      ...entry,
+      userId: remap(entry.userId)
+    })),
+    userGoal8Weeks: input.userGoal8Weeks
+      ? { ...input.userGoal8Weeks, userId: remap(input.userGoal8Weeks.userId) }
+      : null,
+    hallOfFameEntries: input.hallOfFameEntries.map((entry) => ({
+      ...entry,
+      userId: remap(entry.userId)
+    })),
+    missionsUserProgress,
+    teamMembers: input.teamMembers.map((member) => ({ ...member, userId: remap(member.userId) })),
+    ascension: {
+      ...input.ascension,
+      teams: input.ascension.teams.map((team) => ({ ...team, ownerUserId: remap(team.ownerUserId) })),
+      teamMembers: input.ascension.teamMembers.map((member) => ({
+        ...member,
+        userId: remap(member.userId)
+      })),
+      teamPa: input.ascension.teamPa.map((entry) => ({ ...entry, userId: remap(entry.userId) })),
+      userBuilds: input.ascension.userBuilds.map((build) => ({
+        ...build,
+        userId: remap(build.userId)
+      }))
+    }
+  };
+}
+
 function App(): JSX.Element {
   const [state, setState] = useState<AppState>(() => loadState());
   const [gamificationState, setGamificationState] = useState<GamificationState>(() =>
@@ -164,20 +233,28 @@ function App(): JSX.Element {
   const [deletedBuffer, setDeletedBuffer] = useState<{ session: Session; timeoutId: number } | null>(null);
   const [unlockModalLevels, setUnlockModalLevels] = useState<number[]>([]);
   const [sessionUser, setSessionUser] = useState(() => getCurrentSessionUser());
+  const [cloudHydrationDone, setCloudHydrationDone] = useState(false);
+  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
+  const [cloudSaveEnabled, setCloudSaveEnabled] = useState(false);
+  const [sidebarStatsScope, setSidebarStatsScope] = useState<'WEEK' | 'MONTH' | 'TOTAL'>('WEEK');
+  const [communityNotifCount, setCommunityNotifCount] = useState(0);
   const [modoEnabled, setModoEnabled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('nivelr_modo_enabled') === '1';
   });
+  const isAdminSession = Boolean(sessionUser && isModoAdminEmail(sessionUser.email));
+  const effectiveModo = isAdminSession && modoEnabled;
+  const canShowModoToggle = isAdminSession;
 
   const totalXp = state.sessions.reduce((sum, session) => sum + session.xp, 0) + state.bonusXp;
   const displayXp = GAMIFICATION_V1_ENABLED ? gamificationState.userLevel.xpTotal : totalXp;
   const displayLevel = GAMIFICATION_V1_ENABLED
     ? gamificationState.userLevel.level
     : getLevelFromXp(displayXp);
-  const canAccessStats = modoEnabled || displayLevel >= 5;
-  const canAccessMonthly = modoEnabled || displayLevel >= 10;
-  const canAccessSeason = modoEnabled || displayLevel >= 15;
-  const canAccessGoal = modoEnabled || displayLevel >= 20;
+  const canAccessStats = effectiveModo || displayLevel >= 5;
+  const canAccessMonthly = effectiveModo || displayLevel >= 10;
+  const canAccessSeason = effectiveModo || displayLevel >= 15;
+  const canAccessGoal = effectiveModo || displayLevel >= 20;
   const xpToNextLevel = GAMIFICATION_V1_ENABLED
     ? gamificationState.userLevel.xpToNextLevel
     : getXpToNextLevel(displayXp);
@@ -201,8 +278,34 @@ function App(): JSX.Element {
   const weekSessions = state.sessions.filter(
     (session) => getWeekKeyFromDate(new Date(session.createdAt)) === currentWeekKey
   );
-  const weekMinutes = weekSessions.reduce((sum, session) => sum + session.durationMin, 0);
-  const weekDistance = weekSessions.reduce((sum, session) => sum + (session.distanceKm ?? 0), 0);
+  const now = new Date();
+  const monthSessions = state.sessions.filter((session) => {
+    const date = new Date(session.createdAt);
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  });
+  const statsSessions =
+    sidebarStatsScope === 'MONTH' ? monthSessions : sidebarStatsScope === 'TOTAL' ? state.sessions : weekSessions;
+  const weekMinutes = statsSessions.reduce((sum, session) => sum + session.durationMin, 0);
+  const weekDistance = statsSessions.reduce((sum, session) => sum + (session.distanceKm ?? 0), 0);
+  const hasRunnerAssessment = Boolean(state.runnerAssessment);
+  const runnerArchetype = state.runnerAssessment?.result.archetype;
+  const runnerArchetypeLabel = runnerArchetype ? formatRunnerArchetype(runnerArchetype) : null;
+  const runnerArchetypeIcon = (() => {
+    if (runnerArchetype === 'EXPLORATEUR') return '🧭';
+    if (runnerArchetype === 'PILIER') return '🛡️';
+    if (runnerArchetype === 'STRATEGE') return '♟️';
+    if (runnerArchetype === 'PERFORMEUR') return '⚡';
+    return null;
+  })();
+  const shouldPromptRunnerAssessment = shouldSuggestReassessment(
+    state.runnerAssessment?.result.nextRecommendedAt
+  );
+  const runnerAssessmentGateReady = Boolean(
+    sessionUser && cloudHydrationDone && hydratedUserId === sessionUser.id
+  );
+  const mustCompleteRunnerAssessment = Boolean(runnerAssessmentGateReady && !hasRunnerAssessment);
+  const gateWithRunnerAssessment = (element: JSX.Element): JSX.Element =>
+    mustCompleteRunnerAssessment ? <Navigate to="/profil-coureur" replace /> : element;
 
   const showToast = (
     kind: ToastKind,
@@ -225,6 +328,7 @@ function App(): JSX.Element {
   };
 
   const toggleModo = (): void => {
+    if (!canShowModoToggle) return;
     const next = !modoEnabled;
     setModoEnabledLocal(next);
     setModoEnabled(next);
@@ -282,17 +386,91 @@ function App(): JSX.Element {
   }, [state.sessions, gamificationState.userLevel.level]);
 
   useEffect(() => {
+    void initAuthProviderSession().then((user) => {
+      setSessionUser(user);
+    });
     const syncSession = (): void => {
-      setSessionUser(getCurrentSessionUser());
+      const currentSession = getCurrentSessionUser();
+      setSessionUser(currentSession);
+      setSidebarStatsScope(getSidebarStatsScopeLocal(currentSession?.id));
+      const allowed = canUseModoForCurrentSession();
+      if (!allowed) {
+        setModoEnabledLocal(false);
+        setModoEnabled(false);
+        return;
+      }
       setModoEnabled(window.localStorage.getItem('nivelr_modo_enabled') === '1');
     };
     window.addEventListener(LOCAL_AUTH_CHANGED_EVENT, syncSession);
     window.addEventListener('storage', syncSession);
+    const unsubscribeRemoteAuth = isRemoteAuthEnabledLocal()
+      ? subscribeRemoteAuthState(() => {
+          setSessionUser(getCurrentSessionUser());
+          setModoEnabled(window.localStorage.getItem('nivelr_modo_enabled') === '1');
+        })
+      : () => {};
     return () => {
       window.removeEventListener(LOCAL_AUTH_CHANGED_EVENT, syncSession);
       window.removeEventListener('storage', syncSession);
+      unsubscribeRemoteAuth();
     };
   }, []);
+
+  useEffect(() => {
+    if (deletedBuffer) {
+      window.clearTimeout(deletedBuffer.timeoutId);
+      setDeletedBuffer(null);
+    }
+    setPendingImport(null);
+    setCloudHydrationDone(false);
+    setHydratedUserId(null);
+    setCloudSaveEnabled(false);
+    setSidebarStatsScope(getSidebarStatsScopeLocal(sessionUser?.id));
+    const localState = loadState();
+    const localGamification = bindGamificationStateToUser(loadGamificationState(), sessionUser?.id);
+    setState(localState);
+    setGamificationState(localGamification);
+    if (!sessionUser) {
+      setCloudHydrationDone(true);
+      setHydratedUserId(null);
+      setCloudSaveEnabled(false);
+      return;
+    }
+    void loadRemoteAppState().then((remote) => {
+      if (remote.status === 'ok') {
+        setState(remote.state);
+        setGamificationState(bindGamificationStateToUser(remote.gamificationState, sessionUser.id));
+        setCloudSaveEnabled(true);
+      } else if (remote.status === 'not_found') {
+        setCloudSaveEnabled(true);
+      } else {
+        setCloudSaveEnabled(false);
+        showToast(
+          'error',
+          'Synchronisation cloud indisponible. Données conservées en local pour éviter tout écrasement.'
+        );
+      }
+      setCloudHydrationDone(true);
+      setHydratedUserId(sessionUser.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionUser?.id]);
+
+  useEffect(() => {
+    if (!sessionUser || !cloudHydrationDone || hydratedUserId !== sessionUser.id) return;
+    void syncCurrentUserProgressRemote({
+      level: displayLevel,
+      xpTotal: displayXp
+    });
+  }, [sessionUser?.id, displayLevel, displayXp, cloudHydrationDone, hydratedUserId]);
+
+  useEffect(() => {
+    if (!sessionUser || !cloudHydrationDone || hydratedUserId !== sessionUser.id || !cloudSaveEnabled) return;
+    void saveRemoteAppState({
+      state,
+      gamificationState
+    });
+  }, [sessionUser?.id, state, gamificationState, cloudHydrationDone, hydratedUserId, cloudSaveEnabled]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -505,6 +683,15 @@ function App(): JSX.Element {
     showToast('info', 'Objectifs hebdo mis à jour.');
   };
 
+  const onApplyRunnerAssessment = (runnerAssessment: AppState['runnerAssessment']): void => {
+    if (!runnerAssessment) return;
+    setState((prev) => ({
+      ...prev,
+      runnerAssessment
+    }));
+    showToast('success', 'Profil coureur mis a jour.');
+  };
+
   const onClaimMission = (missionId: string): void => {
     let claimedXp = 0;
     let claimedType: 'WEEKLY' | 'ONE_SHOT' | null = null;
@@ -709,6 +896,40 @@ function App(): JSX.Element {
   const gamificationMissions = GAMIFICATION_V1_ENABLED
     ? getMissionsForUi(state.sessions, gamificationState)
     : [];
+  const weekContext = {
+    sessions: state.sessions,
+    weekSessions: state.sessions.filter(
+      (session) => getWeekKeyFromDate(new Date(session.createdAt)) === state.missionWeekKey
+    )
+  };
+  const legacyMissionNotifCount = getMissions(state.goals, state.missionWeekKey).filter(
+    (mission) => getMissionStatus(mission, weekContext, state) === 'DONE'
+  ).length;
+  const v1MissionNotifCount = gamificationMissions.filter((item) => item.status === 'DONE').length;
+  const missionNotifCount = legacyMissionNotifCount + v1MissionNotifCount;
+  const badgesNotifCount = gamificationState.unlockNotifications.filter((item) => !item.seen).length;
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | null = null;
+    const refreshCommunityNotifs = async (): Promise<void> => {
+      if (!sessionUser) {
+        setCommunityNotifCount(0);
+        return;
+      }
+      const contacts = await listContactRequestsForUserAsync(sessionUser.id);
+      if (cancelled) return;
+      setCommunityNotifCount(contacts.incoming.filter((item) => item.status === 'PENDING').length);
+    };
+    void refreshCommunityNotifs();
+    timer = window.setInterval(() => {
+      void refreshCommunityNotifs();
+    }, 15000);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [sessionUser?.id]);
 
   return (
     <BrowserRouter>
@@ -733,7 +954,16 @@ function App(): JSX.Element {
                 </div>
               </div>
               <div className="sidebar-sport-glance">
-                <span>{weekSessions.length} seance(s)</span>
+                <span>
+                  {statsSessions.length} seance(s){' '}
+                  <small>
+                    {sidebarStatsScope === 'WEEK'
+                      ? 'hebdo'
+                      : sidebarStatsScope === 'MONTH'
+                        ? 'mois'
+                        : 'total'}
+                  </small>
+                </span>
                 <span>{weekMinutes} min</span>
                 <span>{weekDistance.toFixed(1)} km</span>
               </div>
@@ -747,9 +977,14 @@ function App(): JSX.Element {
             <nav>
               <NavLink to="/add-session">Nouvelle séance</NavLink>
               <NavLink to="/sessions">Sessions</NavLink>
-              <NavLink to="/missions">Missions</NavLink>
+              <NavLink to="/missions">
+                <span className="nav-link-row">
+                  <span>Missions</span>
+                  {missionNotifCount > 0 ? <small className="nav-count">{missionNotifCount}</small> : null}
+                </span>
+              </NavLink>
               <NavLink
-                to="/"
+                to="/statistiques"
                 className={({ isActive }) =>
                   [isActive ? 'active' : '', !canAccessStats ? 'is-disabled' : '']
                     .filter(Boolean)
@@ -816,7 +1051,12 @@ function App(): JSX.Element {
                   {!canAccessGoal ? <small className="nav-lock">🔒 N20</small> : null}
                 </span>
               </NavLink>
-              <NavLink to="/badges">Badges</NavLink>
+              <NavLink to="/badges">
+                <span className="nav-link-row">
+                  <span>Badges</span>
+                  {badgesNotifCount > 0 ? <small className="nav-count">{badgesNotifCount}</small> : null}
+                </span>
+              </NavLink>
               <NavLink to="/guide-xp">Guide XP</NavLink>
             </nav>
 
@@ -825,18 +1065,43 @@ function App(): JSX.Element {
 
         <div className="app-content">
           <header className="topbar topbar-global">
+            <NavLink to="/explications" className="topbar-brand-link" aria-label="Accueil NIVELR">
+              <img
+                src="/logo_nivelr_top.png?v=20260221-2"
+                alt="NIVELR"
+                className="topbar-brand-logo"
+              />
+            </NavLink>
             <nav className="topbar-links" aria-label="Navigation globale">
-              <button type="button" className={`modo-toggle-btn ${modoEnabled ? 'is-on' : ''}`} onClick={toggleModo}>
-                {modoEnabled ? 'Modo ON' : 'Modo OFF'}
-              </button>
+              {canShowModoToggle ? (
+                <button
+                  type="button"
+                  className={`modo-toggle-btn ${effectiveModo ? 'is-on' : ''}`}
+                  onClick={toggleModo}
+                >
+                  {effectiveModo ? 'Modo ON' : 'Modo OFF'}
+                </button>
+              ) : null}
               <NavLink to="/explications">Accueil</NavLink>
-              {sessionUser ? <NavLink to="/utilisateurs">Communauté</NavLink> : null}
+              {sessionUser ? (
+                <NavLink to="/utilisateurs">
+                  <span className="nav-link-row">
+                    <span>Communauté</span>
+                    {communityNotifCount > 0 ? <small className="nav-count">{communityNotifCount}</small> : null}
+                  </span>
+                </NavLink>
+              ) : null}
               {sessionUser ? (
                 <>
                   <NavLink to="/profil" className="topbar-profile-link">
                     <span>Profil</span>
                   </NavLink>
                   <div className="topbar-profile-meta" aria-label="Niveau et progression XP">
+                    {runnerArchetypeLabel && runnerArchetypeIcon ? (
+                      <small className={`topbar-archetype-badge is-${runnerArchetype?.toLowerCase()}`}>
+                        {runnerArchetypeIcon} {runnerArchetypeLabel}
+                      </small>
+                    ) : null}
                     <small>Lvl {displayLevel}</small>
                     <small>{displayXp}xp/{xpTarget}xp</small>
                   </div>
@@ -846,6 +1111,54 @@ function App(): JSX.Element {
               )}
             </nav>
           </header>
+          {sessionUser ? (
+            <nav className="mobile-user-nav" aria-label="Navigation utilisateur mobile">
+              <NavLink to="/add-session">Nouvelle séance</NavLink>
+              <NavLink to="/sessions">Sessions</NavLink>
+              <NavLink to="/missions">Missions</NavLink>
+              <NavLink
+                to="/statistiques"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessStats ? 'is-disabled' : ''].filter(Boolean).join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessStats) event.preventDefault();
+                }}
+                aria-disabled={!canAccessStats}
+                title={!canAccessStats ? 'Debloque au niveau 5' : undefined}
+              >
+                Statistiques
+              </NavLink>
+              <NavLink
+                to="/season"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessSeason ? 'is-disabled' : ''].filter(Boolean).join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessSeason) event.preventDefault();
+                }}
+                aria-disabled={!canAccessSeason}
+                title={!canAccessSeason ? 'Debloque au niveau 15' : undefined}
+              >
+                Saison
+              </NavLink>
+              <NavLink
+                to="/objectif-personnel"
+                className={({ isActive }) =>
+                  [isActive ? 'active' : '', !canAccessGoal ? 'is-disabled' : ''].filter(Boolean).join(' ')
+                }
+                onClick={(event) => {
+                  if (!canAccessGoal) event.preventDefault();
+                }}
+                aria-disabled={!canAccessGoal}
+                title={!canAccessGoal ? 'Debloque au niveau 20' : undefined}
+              >
+                Objectif perso
+              </NavLink>
+              <NavLink to="/badges">Badges</NavLink>
+              <NavLink to="/guide-xp">Guide XP</NavLink>
+            </nav>
+          ) : null}
           <main>
             {toast ? (
               <Toast
@@ -921,9 +1234,10 @@ function App(): JSX.Element {
             ) : null}
 
             <Routes>
+              <Route path="/" element={<Navigate to="/explications" replace />} />
               <Route
-                path="/"
-                element={
+                path="/statistiques"
+                element={gateWithRunnerAssessment(
                   canAccessStats ? (
                     <Home
                       state={state}
@@ -931,7 +1245,7 @@ function App(): JSX.Element {
                       onReset={onReset}
                       onExportState={onExportState}
                       onImportState={onImportState}
-                      isModoEnabled={modoEnabled}
+                      isModoEnabled={effectiveModo}
                     />
                   ) : (
                     renderLockedPage(
@@ -940,11 +1254,11 @@ function App(): JSX.Element {
                       'Continue tes séances pour débloquer les statistiques détaillées.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/sessions"
-                element={
+                element={gateWithRunnerAssessment(
                   <Sessions
                     state={state}
                     onUpdateSession={onUpdateSession}
@@ -952,11 +1266,11 @@ function App(): JSX.Element {
                     onDuplicateSession={onDuplicateSession}
                     onExportFiltered={onExportFiltered}
                   />
-                }
+                )}
               />
               <Route
                 path="/add-session"
-                element={
+                element={gateWithRunnerAssessment(
                   <AddSession
                     existingSessions={state.sessions}
                     onAddSession={(session) => {
@@ -964,11 +1278,11 @@ function App(): JSX.Element {
                       showToast('success', `Séance ajoutée: +${session.xp} XP.`);
                     }}
                   />
-                }
+                )}
               />
               <Route
                 path="/missions"
-                element={
+                element={gateWithRunnerAssessment(
                   <Missions
                     state={state}
                     gamificationState={gamificationState}
@@ -977,11 +1291,11 @@ function App(): JSX.Element {
                     onClaimMissionV1={onClaimMissionV1}
                     onUpdateGoals={onUpdateGoals}
                   />
-                }
+                )}
               />
               <Route
                 path="/badges"
-                element={
+                element={gateWithRunnerAssessment(
                   sessionUser ? (
                     <Badges
                       gamificationState={gamificationState}
@@ -991,31 +1305,53 @@ function App(): JSX.Element {
                   ) : (
                     renderAuthLockedPage('Badges', 'Connecte-toi pour voir tes badges debloques.')
                   )
-                }
+                )}
               />
               <Route
                 path="/guide-xp"
-                element={<XpGuide state={state} gamificationState={gamificationState} />}
+                element={gateWithRunnerAssessment(<XpGuide state={state} gamificationState={gamificationState} />)}
               />
-              <Route path="/connexion" element={<AuthSignIn />} />
-              <Route path="/profil" element={<Profile />} />
               <Route
-                path="/utilisateurs"
+                path="/profil-coureur"
                 element={
                   sessionUser ? (
-                    <Users isModoEnabled={modoEnabled} />
+                    <RunnerAssessment
+                      initialAnswers={state.runnerAssessment?.answers}
+                      requiredFlow={!hasRunnerAssessment}
+                      onApply={(snapshot) => onApplyRunnerAssessment(snapshot)}
+                    />
+                  ) : (
+                    renderAuthLockedPage('Profil coureur', 'Connecte-toi pour lancer le questionnaire.')
+                  )
+                }
+              />
+              <Route path="/connexion" element={gateWithRunnerAssessment(<AuthSignIn />)} />
+              <Route
+                path="/profil"
+                element={gateWithRunnerAssessment(
+                  <Profile
+                    runnerAssessment={state.runnerAssessment}
+                    shouldPromptRunnerAssessment={shouldPromptRunnerAssessment}
+                  />
+                )}
+              />
+              <Route
+                path="/utilisateurs"
+                element={gateWithRunnerAssessment(
+                  sessionUser ? (
+                    <Users isModoEnabled={effectiveModo} />
                   ) : (
                     renderAuthLockedPage(
                       'Communauté',
                       'Connecte-toi pour rechercher des coureurs et gérer tes contacts.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/abonnement"
-                element={
-                  modoEnabled ? (
+                element={gateWithRunnerAssessment(
+                  effectiveModo ? (
                     <Subscription />
                   ) : (
                     renderAuthLockedPage(
@@ -1023,11 +1359,11 @@ function App(): JSX.Element {
                       'Cette section est temporairement indisponible.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/progression"
-                element={
+                element={gateWithRunnerAssessment(
                   canAccessMonthly ? (
                     <Progression
                       sessions={state.sessions}
@@ -1045,11 +1381,11 @@ function App(): JSX.Element {
                       'Débloque ce module pour choisir un défi mensuel et gagner un bonus XP.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/defi-mensuel"
-                element={
+                element={gateWithRunnerAssessment(
                   canAccessMonthly ? (
                     <Progression
                       sessions={state.sessions}
@@ -1067,11 +1403,11 @@ function App(): JSX.Element {
                       'Débloque ce module pour choisir un défi mensuel et gagner un bonus XP.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/objectif-personnel"
-                element={
+                element={gateWithRunnerAssessment(
                   canAccessGoal ? (
                     <Progression
                       sessions={state.sessions}
@@ -1089,11 +1425,11 @@ function App(): JSX.Element {
                       'Atteins le niveau 20 pour déverrouiller cette section.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/objectif-8-semaines"
-                element={
+                element={gateWithRunnerAssessment(
                   canAccessGoal ? (
                     <Progression
                       sessions={state.sessions}
@@ -1111,11 +1447,11 @@ function App(): JSX.Element {
                       'Atteins le niveau 20 pour déverrouiller cette section.'
                     )
                   )
-                }
+                )}
               />
               <Route
                 path="/season"
-                element={
+                element={gateWithRunnerAssessment(
                   canAccessSeason ? (
                     <Season
                       gamificationState={gamificationState}
@@ -1132,11 +1468,27 @@ function App(): JSX.Element {
                       'Atteins le niveau 15 pour rejoindre une équipe et démarrer la saison.'
                     )
                   )
-                }
+                )}
               />
-              <Route path="/explications" element={<Explications isAuthenticated={Boolean(sessionUser)} />} />
+              <Route
+                path="/explications"
+                element={gateWithRunnerAssessment(<Explications isAuthenticated={Boolean(sessionUser)} />)}
+              />
+              <Route path="/mentions-legales" element={gateWithRunnerAssessment(<LegalMentions />)} />
+              <Route path="/confidentialite" element={gateWithRunnerAssessment(<PrivacyPolicy />)} />
+              <Route path="/cookies" element={gateWithRunnerAssessment(<CookiesPolicy />)} />
+              <Route path="/cgu" element={gateWithRunnerAssessment(<TermsOfUse />)} />
+              <Route path="/contact" element={gateWithRunnerAssessment(<ContactLegal />)} />
             </Routes>
+            <CookieConsentModal />
           </main>
+          <footer className="app-legal-footer" aria-label="Informations légales">
+            <NavLink to="/mentions-legales">Mentions légales</NavLink>
+            <NavLink to="/confidentialite">Confidentialité</NavLink>
+            <NavLink to="/cookies">Cookies</NavLink>
+            <NavLink to="/cgu">CGU</NavLink>
+            <NavLink to="/contact">Contact</NavLink>
+          </footer>
         </div>
       </div>
     </BrowserRouter>

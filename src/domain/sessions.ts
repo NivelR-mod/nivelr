@@ -42,11 +42,12 @@ export function computeSessionXp(input: SessionInput): number {
   );
 }
 
-export function createSession(input: SessionInput): Session {
+export function createSession(input: SessionInput, options?: { createdAt?: string }): Session {
+  const createdAtIso = options?.createdAt ? new Date(options.createdAt).toISOString() : new Date().toISOString();
   return {
     ...input,
     id: generateId(),
-    createdAt: new Date().toISOString(),
+    createdAt: createdAtIso,
     xp: computeSessionXp(input)
   };
 }

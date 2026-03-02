@@ -23,8 +23,10 @@ type SessionKind =
   | 'RECUP';
 type Surface = 'ROUTE' | 'TRAIL' | 'TAPIS';
 type GoalRespect = 'YES' | 'PARTIAL' | 'NO';
+type IntervalUnit = 'SEC' | 'MIN' | 'M' | 'KM';
 
 interface FormState {
+  sessionDate: string;
   distanceKm: string;
   durationHours: string;
   durationMinutes: string;
@@ -36,6 +38,15 @@ interface FormState {
   comment: string;
   surface: Surface;
   goalRespect: GoalRespect;
+}
+
+interface IntervalBlock {
+  id: string;
+  reps: string;
+  workValue: string;
+  workUnit: IntervalUnit;
+  restValue: string;
+  restUnit: IntervalUnit;
 }
 
 interface SessionRecommendation {
@@ -55,6 +66,14 @@ const SESSION_KIND_OPTIONS: Array<{ value: SessionKind; label: string; short: st
   { value: 'COTES', label: 'Côtes / travail en montée', short: 'Côtes' },
   { value: 'RENFO_COURSE', label: 'Renforcement spécifique course', short: 'Renfo' },
   { value: 'RECUP', label: 'Récupération / footing léger', short: 'Récup' }
+];
+
+const INTERVAL_COMPATIBLE_KINDS: SessionKind[] = [
+  'SEUIL',
+  'FRACTIONNE_COURT',
+  'FRACTIONNE_LONG',
+  'FARTLEK',
+  'COTES'
 ];
 
 function mapKindToSessionInput(
@@ -132,6 +151,114 @@ function goalRespectLabel(value: GoalRespect): string {
 
 function isDistanceRequired(kind: SessionKind): boolean {
   return kind !== 'RENFO_COURSE';
+}
+
+function isIntervalCompatibleKind(kind: SessionKind): boolean {
+  return INTERVAL_COMPATIBLE_KINDS.includes(kind);
+}
+
+function createIntervalBlock(seed = Date.now()): IntervalBlock {
+  return {
+    id: `interval_${seed}_${Math.round(Math.random() * 100000)}`,
+    reps: '1',
+    workValue: '',
+    workUnit: 'MIN',
+    restValue: '',
+    restUnit: 'MIN'
+  };
+}
+
+function parsePositiveNumber(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.');
+  if (!normalized) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function intervalUnitLabel(unit: IntervalUnit): string {
+  if (unit === 'SEC') return 'sec';
+  if (unit === 'MIN') return 'min';
+  if (unit === 'M') return 'm';
+  return 'km';
+}
+
+function summarizeIntervals(blocks: IntervalBlock[]): string {
+  return blocks
+    .map((block) => {
+      const reps = Math.max(1, Math.floor(Number(block.reps) || 1));
+      const workPart = block.workValue
+        ? `${block.workValue.replace('.', ',')}${intervalUnitLabel(block.workUnit)}`
+        : '?';
+      const restPart = block.restValue
+        ? `${block.restValue.replace('.', ',')}${intervalUnitLabel(block.restUnit)} rec`
+        : '';
+      return restPart ? `${reps}x(${workPart} / ${restPart})` : `${reps}x(${workPart})`;
+    })
+    .join(' · ');
+}
+
+function computeIntervalTotals(blocks: IntervalBlock[]): {
+  durationMin: number;
+  distanceKm: number;
+  hasDuration: boolean;
+  hasDistance: boolean;
+  hasInvalid: boolean;
+} {
+  let totalDurationSec = 0;
+  let totalDistanceKm = 0;
+  let hasDuration = false;
+  let hasDistance = false;
+  let hasInvalid = false;
+
+  for (const block of blocks) {
+    const reps = Math.max(1, Math.floor(Number(block.reps) || 1));
+    const workValue = parsePositiveNumber(block.workValue);
+    const restValue = parsePositiveNumber(block.restValue);
+
+    if (block.workValue.trim() && workValue == null) hasInvalid = true;
+    if (block.restValue.trim() && restValue == null) hasInvalid = true;
+
+    if (workValue != null) {
+      if (block.workUnit === 'SEC') {
+        totalDurationSec += reps * workValue;
+        hasDuration = true;
+      } else if (block.workUnit === 'MIN') {
+        totalDurationSec += reps * workValue * 60;
+        hasDuration = true;
+      } else if (block.workUnit === 'M') {
+        totalDistanceKm += (reps * workValue) / 1000;
+        hasDistance = true;
+      } else {
+        totalDistanceKm += reps * workValue;
+        hasDistance = true;
+      }
+    }
+
+    if (restValue != null) {
+      if (block.restUnit === 'SEC') {
+        totalDurationSec += reps * restValue;
+        hasDuration = true;
+      } else if (block.restUnit === 'MIN') {
+        totalDurationSec += reps * restValue * 60;
+        hasDuration = true;
+      } else if (block.restUnit === 'M') {
+        totalDistanceKm += (reps * restValue) / 1000;
+        hasDistance = true;
+      } else {
+        totalDistanceKm += reps * restValue;
+        hasDistance = true;
+      }
+    }
+  }
+
+  return {
+    durationMin: totalDurationSec / 60,
+    distanceKm: totalDistanceKm,
+    hasDuration,
+    hasDistance,
+    hasInvalid
+  };
 }
 
 function inferMainGoal(existingSessions: Session[]): 'PERFORMANCE' | 'LONG_DISTANCE' | 'HEALTH' {
@@ -228,8 +355,11 @@ function getRecommendedKind(existingSessions: Session[]): SessionRecommendation 
 
 export default function AddSession({ onAddSession, existingSessions = [] }: AddSessionProps): JSX.Element {
   const navigate = useNavigate();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const minDateIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const [form, setForm] = useState<FormState>({
+    sessionDate: todayIso,
     distanceKm: '',
     durationHours: '0',
     durationMinutes: '30',
@@ -246,6 +376,9 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
   const [error, setError] = useState<string>('');
   const [duplicateHint, setDuplicateHint] = useState<string>('');
   const [manualChoice, setManualChoice] = useState<boolean>(false);
+  const [intervalBlocks, setIntervalBlocks] = useState<IntervalBlock[]>([createIntervalBlock()]);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [maxReachedStep, setMaxReachedStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
   const setField = (field: keyof FormState, value: string): void => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -259,6 +392,12 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) return NaN;
     return hours * 60 + minutes + seconds / 60;
   }, [form.durationHours, form.durationMinutes, form.durationSeconds]);
+  const intervalTotals = useMemo(() => computeIntervalTotals(intervalBlocks), [intervalBlocks]);
+  const intervalModeActive = isIntervalCompatibleKind(form.kind);
+  const effectiveDurationMin =
+    intervalModeActive && intervalTotals.hasDuration ? intervalTotals.durationMin : durationTotalMin;
+  const effectiveDistanceKm =
+    intervalModeActive && intervalTotals.hasDistance ? intervalTotals.distanceKm : Number(form.distanceKm);
 
   useEffect(() => {
     if (!manualChoice) {
@@ -266,19 +405,67 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     }
   }, [manualChoice, recommendation.kind]);
 
+  const setIntervalField = (id: string, field: keyof IntervalBlock, value: string): void => {
+    setIntervalBlocks((prev) =>
+      prev.map((block) => (block.id === id ? { ...block, [field]: value } : block))
+    );
+  };
+
+  const addIntervalBlock = (): void => {
+    setIntervalBlocks((prev) => [...prev, createIntervalBlock()]);
+  };
+
+  const removeIntervalBlock = (id: string): void => {
+    setIntervalBlocks((prev) => (prev.length > 1 ? prev.filter((block) => block.id !== id) : prev));
+  };
+
+  const applyIntervalTotalsToMainFields = (): void => {
+    const next: Partial<FormState> = {};
+    if (intervalTotals.hasDuration) {
+      const totalSeconds = Math.round(intervalTotals.durationMin * 60);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      next.durationHours = String(hours);
+      next.durationMinutes = String(minutes);
+      next.durationSeconds = String(seconds);
+    }
+    if (intervalTotals.hasDistance) {
+      next.distanceKm = intervalTotals.distanceKm.toFixed(2).replace(/\.?0+$/, '');
+    }
+    setForm((prev) => ({ ...prev, ...next }));
+  };
+
   const validate = (): string | null => {
     const distanceRequired = isDistanceRequired(form.kind);
     const hours = Number(form.durationHours);
     const minutes = Number(form.durationMinutes);
     const seconds = Number(form.durationSeconds);
-    const duration = durationTotalMin;
-    const distance = Number(form.distanceKm);
+    const duration = effectiveDurationMin;
+    const distance = effectiveDistanceKm;
     const rpe = Number(form.rpe);
     const hrAvg = form.hrAvg ? Number(form.hrAvg) : undefined;
     const elevation = form.elevationM ? Number(form.elevationM) : undefined;
+    const selectedDate = new Date(`${form.sessionDate}T12:00:00`);
+    const now = new Date();
+    const minAllowed = new Date(now);
+    minAllowed.setDate(minAllowed.getDate() - 7);
+    minAllowed.setHours(0, 0, 0, 0);
+    now.setHours(23, 59, 59, 999);
 
     if (distanceRequired && (!Number.isFinite(distance) || distance <= 0)) {
       return 'La distance doit être un nombre supérieur à 0.';
+    }
+    if (intervalModeActive) {
+      if (!intervalBlocks.length) {
+        return 'Ajoute au moins un bloc intervalle.';
+      }
+      if (intervalTotals.hasInvalid) {
+        return 'Un bloc intervalle contient une valeur invalide.';
+      }
+      if (!intervalTotals.hasDuration && !intervalTotals.hasDistance) {
+        return 'Renseigne au moins un temps ou une distance dans tes intervalles.';
+      }
     }
     if (!Number.isInteger(hours) || hours < 0) {
       return 'Les heures doivent être un entier positif.';
@@ -292,6 +479,15 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     if (!Number.isFinite(duration) || duration <= 0) {
       return 'La durée doit être supérieure à 0.';
     }
+    if (!form.sessionDate || Number.isNaN(selectedDate.getTime())) {
+      return 'La date de séance est invalide.';
+    }
+    if (selectedDate.getTime() < minAllowed.getTime()) {
+      return 'Tu peux enregistrer une séance jusqu’à J-7 maximum.';
+    }
+    if (selectedDate.getTime() > now.getTime()) {
+      return 'La date de séance ne peut pas être dans le futur.';
+    }
     if (!Number.isInteger(rpe) || rpe < 1 || rpe > 10) {
       return 'Le RPE doit être un entier entre 1 et 10.';
     }
@@ -304,19 +500,61 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     return null;
   };
 
+  const validateDateStep = (): string | null => {
+    const selectedDate = new Date(`${form.sessionDate}T12:00:00`);
+    const now = new Date();
+    const minAllowed = new Date(now);
+    minAllowed.setDate(minAllowed.getDate() - 7);
+    minAllowed.setHours(0, 0, 0, 0);
+    now.setHours(23, 59, 59, 999);
+    if (!form.sessionDate || Number.isNaN(selectedDate.getTime())) return 'La date de séance est invalide.';
+    if (selectedDate.getTime() < minAllowed.getTime()) return 'Tu peux enregistrer une séance jusqu’à J-7 maximum.';
+    if (selectedDate.getTime() > now.getTime()) return 'La date de séance ne peut pas être dans le futur.';
+    return null;
+  };
+
+  const validateIntervalsStep = (): string | null => {
+    if (!intervalModeActive) return null;
+    if (!intervalBlocks.length) return 'Ajoute au moins un bloc intervalle.';
+    if (intervalTotals.hasInvalid) return 'Un bloc intervalle contient une valeur invalide.';
+    if (!intervalTotals.hasDuration && !intervalTotals.hasDistance) {
+      return 'Renseigne au moins un temps ou une distance dans tes intervalles.';
+    }
+    return null;
+  };
+
+  const validateDistanceDurationStep = (): string | null => {
+    const distanceRequired = isDistanceRequired(form.kind);
+    const hours = Number(form.durationHours);
+    const minutes = Number(form.durationMinutes);
+    const seconds = Number(form.durationSeconds);
+    const duration = effectiveDurationMin;
+    const distance = effectiveDistanceKm;
+    const rpe = Number(form.rpe);
+    if (distanceRequired && (!Number.isFinite(distance) || distance <= 0)) {
+      return 'La distance doit être un nombre supérieur à 0.';
+    }
+    if (!Number.isInteger(hours) || hours < 0) return 'Les heures doivent être un entier positif.';
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 59) return 'Les minutes doivent être entre 0 et 59.';
+    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 59) return 'Les secondes doivent être entre 0 et 59.';
+    if (!Number.isFinite(duration) || duration <= 0) return 'La durée doit être supérieure à 0.';
+    if (!Number.isInteger(rpe) || rpe < 1 || rpe > 10) return 'Le RPE doit être un entier entre 1 et 10.';
+    return null;
+  };
+
   const pacePreview = useMemo(() => {
     if (!isDistanceRequired(form.kind)) return '--';
-    const distance = Number(form.distanceKm);
-    const duration = durationTotalMin;
+    const distance = effectiveDistanceKm;
+    const duration = effectiveDurationMin;
     if (!Number.isFinite(distance) || distance <= 0) return '--';
     if (!Number.isFinite(duration) || duration <= 0) return '--';
     return formatPace(distance, duration);
-  }, [form.distanceKm, durationTotalMin, form.kind]);
+  }, [effectiveDistanceKm, effectiveDurationMin, form.kind]);
 
   const xpPreview = useMemo(() => {
     const distanceRequired = isDistanceRequired(form.kind);
-    const distance = Number(form.distanceKm);
-    const duration = durationTotalMin;
+    const distance = effectiveDistanceKm;
+    const duration = effectiveDurationMin;
     const rpe = Number(form.rpe);
     if (distanceRequired && (!Number.isFinite(distance) || distance <= 0)) return null;
     if (!Number.isFinite(duration) || duration <= 0) return null;
@@ -336,7 +574,7 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     };
 
     return computeSessionXp(input);
-  }, [form.distanceKm, durationTotalMin, form.kind, form.rpe]);
+  }, [effectiveDistanceKm, effectiveDurationMin, form.kind, form.rpe]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -347,8 +585,8 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     }
 
     const distanceRequired = isDistanceRequired(form.kind);
-    const distance = Number(form.distanceKm);
-    const duration = durationTotalMin;
+    const distance = effectiveDistanceKm;
+    const duration = effectiveDurationMin;
     const rpe = Number(form.rpe);
 
     const mapped = mapKindToSessionInput(form.kind);
@@ -359,6 +597,9 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     metaParts.push(`Catégorie: ${kindLabel(form.kind)}`);
     metaParts.push(`Surface: ${form.surface.toLowerCase()}`);
     metaParts.push(`Objectif respecté: ${goalRespectLabel(form.goalRespect)}`);
+    if (intervalModeActive && intervalBlocks.length) {
+      metaParts.push(`Intervalles: ${summarizeIntervals(intervalBlocks)}`);
+    }
     if (distanceRequired) {
       metaParts.push(`Allure auto: ${formatPace(distance, duration)}`);
     }
@@ -377,9 +618,10 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
       },
       comment: comments || undefined
     };
+    const createdAt = new Date(`${form.sessionDate}T12:00:00`).toISOString();
 
     const duplicate = existingSessions.find((session) => {
-      const deltaMs = Math.abs(Date.now() - new Date(session.createdAt).getTime());
+      const deltaMs = Math.abs(new Date(createdAt).getTime() - new Date(session.createdAt).getTime());
       const withinTwoHours = deltaMs <= 2 * 60 * 60 * 1000;
       return (
         withinTwoHours &&
@@ -398,9 +640,16 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
       setDuplicateHint('');
     }
 
-    const session = createSession(payload);
+    const session = createSession(payload, { createdAt });
     onAddSession(session);
     navigate('/sessions');
+  };
+
+  const goToStep = (step: 1 | 2 | 3 | 4 | 5): void => {
+    if (step <= maxReachedStep) {
+      setCurrentStep(step);
+      setError('');
+    }
   };
 
   return (
@@ -453,97 +702,376 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
         </article>
 
         <fieldset className="form-group required-group">
-          <legend>Obligatoire</legend>
-          <div className="quick-metrics-row">
-            <label className="field-compact">
-              Distance (km){isDistanceRequired(form.kind) ? '' : ' (optionnelle pour renfo)'}
-              <input
-                type="number"
-                min={0.1}
-                step={0.1}
-                value={form.distanceKm}
-                onChange={(e) => setField('distanceKm', e.target.value)}
-                required={isDistanceRequired(form.kind)}
-              />
-            </label>
+          <legend>Parcours guidé</legend>
 
-            <label className="field-compact">
-              Durée (h/min/sec)
-              <div className="duration-inputs">
-                <input
-                  type="number"
-                  aria-label="Durée (heures)"
-                  min={0}
-                  max={23}
-                  value={form.durationHours}
-                  onChange={(e) => setField('durationHours', e.target.value)}
-                  required
-                />
-                <input
-                  type="number"
-                  aria-label="Durée (minutes)"
-                  min={0}
-                  max={59}
-                  value={form.durationMinutes}
-                  onChange={(e) => setField('durationMinutes', e.target.value)}
-                  required
-                />
-                <input
-                  type="number"
-                  aria-label="Durée (secondes)"
-                  min={0}
-                  max={59}
-                  value={form.durationSeconds}
-                  onChange={(e) => setField('durationSeconds', e.target.value)}
-                  required
-                />
-              </div>
-            </label>
-          </div>
-
-          <div className="quick-required-grid">
-            <div className="session-kind-field">
-              <span>Type de séance</span>
-              <div role="radiogroup" aria-label="Type de séance" className="session-kind-grid">
-                {SESSION_KIND_OPTIONS.map((option) => (
+          <section className={`optional-panel ${currentStep === 1 ? 'session-step-panel is-open' : 'session-step-panel'}`}>
+            <header
+              className="session-step-head"
+              role="button"
+              tabIndex={0}
+              onClick={() => goToStep(1)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  goToStep(1);
+                }
+              }}
+            >
+              <span>Date</span>
+              <small>{form.sessionDate}</small>
+            </header>
+            {currentStep === 1 ? (
+              <div className="session-step-body">
+                <label className="field-compact">
+                  Date de séance
+                  <input
+                    type="date"
+                    min={minDateIso}
+                    max={todayIso}
+                    value={form.sessionDate}
+                    onChange={(e) => setField('sessionDate', e.target.value)}
+                    required
+                  />
+                </label>
+                <div className="goal-actions">
                   <button
-                    key={option.value}
                     type="button"
-                    role="radio"
-                    aria-checked={form.kind === option.value}
-                    className={`session-kind-card ${form.kind === option.value ? 'is-active' : ''}`}
                     onClick={() => {
-                      setField('kind', option.value);
-                      setManualChoice(true);
+                      const stepError = validateDateStep();
+                      if (stepError) {
+                        setError(stepError);
+                        return;
+                      }
+                      setError('');
+                      setCurrentStep(2);
+                      setMaxReachedStep((prev) => (prev < 2 ? 2 : prev));
                     }}
-                    title={option.label}
                   >
-                    <strong>{option.short}</strong>
-                    <small>{option.label}</small>
+                    Valider la date
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
-          </div>
-          <p className="inline-info">{kindHint(form.kind)}</p>
+            ) : null}
+          </section>
 
-          <div className="rpe-row">
-            <label htmlFor="rpe-input-v2">Ressenti global (RPE {form.rpe}/10)</label>
-            <input
-              id="rpe-input-v2"
-              type="range"
-              min={1}
-              max={10}
-              value={form.rpe}
-              onChange={(e) => setField('rpe', e.target.value)}
-              aria-label="RPE"
-            />
-          </div>
-        </fieldset>
+          <section className={`optional-panel ${currentStep === 2 ? 'session-step-panel is-open' : 'session-step-panel'}`}>
+            <header
+              className="session-step-head"
+              role="button"
+              tabIndex={0}
+              onClick={() => goToStep(2)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  goToStep(2);
+                }
+              }}
+            >
+              <span>Type de séance</span>
+              <small>{kindLabel(form.kind)}</small>
+            </header>
+            {currentStep === 2 ? (
+              <div className="session-step-body">
+                <div className="quick-required-grid">
+                  <div className="session-kind-field">
+                    <span>Type de séance</span>
+                    <div role="radiogroup" aria-label="Type de séance" className="session-kind-grid">
+                      {SESSION_KIND_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={form.kind === option.value}
+                          className={`session-kind-card ${form.kind === option.value ? 'is-active' : ''}`}
+                          onClick={() => {
+                            setField('kind', option.value);
+                            setManualChoice(true);
+                          }}
+                          title={option.label}
+                        >
+                          <strong>{option.short}</strong>
+                          <small>{option.label}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <p className="inline-info">{kindHint(form.kind)}</p>
+                <div className="goal-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError('');
+                      if (isIntervalCompatibleKind(form.kind)) {
+                        setCurrentStep(3);
+                        setMaxReachedStep((prev) => (prev < 3 ? 3 : prev));
+                      } else {
+                        setCurrentStep(4);
+                        setMaxReachedStep((prev) => (prev < 4 ? 4 : prev));
+                      }
+                    }}
+                  >
+                    Valider le type
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
 
-        <details className="optional-panel">
-          <summary>Informations facultatives</summary>
-          <fieldset className="form-group optional-group">
+          {isIntervalCompatibleKind(form.kind) ? (
+            <section
+              className={`optional-panel ${currentStep === 3 ? 'session-step-panel is-open' : 'session-step-panel'}`}
+            >
+              <header
+                className="session-step-head"
+                role="button"
+                tabIndex={0}
+                onClick={() => goToStep(3)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    goToStep(3);
+                  }
+                }}
+              >
+                <span>Intervalles personnalisés</span>
+                <small>{intervalBlocks.length} bloc(s)</small>
+              </header>
+              {currentStep === 3 ? (
+                <div className="session-step-body">
+                  <div className="interval-builder">
+                    <div className="interval-builder-head">
+                      <p>Intervalles travail / récupération</p>
+                    </div>
+                    <div className="interval-builder-list">
+                      {intervalBlocks.map((block, index) => (
+                        <div className="interval-row" key={block.id}>
+                          <p className="interval-row-title">Bloc {index + 1}</p>
+                          <div className="interval-row-grid">
+                            <label>
+                              Répétitions
+                              <input
+                                type="number"
+                                min={1}
+                                value={block.reps}
+                                onChange={(event) => setIntervalField(block.id, 'reps', event.target.value)}
+                              />
+                            </label>
+                            <label>
+                              Travail
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                placeholder="Ex: 30"
+                                value={block.workValue}
+                                onChange={(event) => setIntervalField(block.id, 'workValue', event.target.value)}
+                              />
+                            </label>
+                            <label>
+                              Unité travail
+                              <select
+                                value={block.workUnit}
+                                onChange={(event) => setIntervalField(block.id, 'workUnit', event.target.value)}
+                              >
+                                <option value="SEC">Secondes</option>
+                                <option value="MIN">Minutes</option>
+                                <option value="M">Mètres</option>
+                                <option value="KM">Kilomètres</option>
+                              </select>
+                            </label>
+                            <label>
+                              Récupération
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                placeholder="Ex: 45"
+                                value={block.restValue}
+                                onChange={(event) => setIntervalField(block.id, 'restValue', event.target.value)}
+                              />
+                            </label>
+                            <label>
+                              Unité récup
+                              <select
+                                value={block.restUnit}
+                                onChange={(event) => setIntervalField(block.id, 'restUnit', event.target.value)}
+                              >
+                                <option value="SEC">Secondes</option>
+                                <option value="MIN">Minutes</option>
+                                <option value="M">Mètres</option>
+                                <option value="KM">Kilomètres</option>
+                              </select>
+                            </label>
+                          </div>
+                          <div className="interval-row-actions">
+                            <button
+                              type="button"
+                              className="btn-compact"
+                              onClick={() => removeIntervalBlock(block.id)}
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="goal-actions interval-actions">
+                      <button type="button" className="btn-compact" onClick={addIntervalBlock}>
+                        + Ajouter un bloc
+                      </button>
+                      <button type="button" className="btn-compact" onClick={applyIntervalTotalsToMainFields}>
+                        Appliquer les totaux aux champs
+                      </button>
+                    </div>
+                    <p className="page-subtitle">
+                      Totaux intervalles: {intervalTotals.hasDuration ? `${intervalTotals.durationMin.toFixed(1)} min` : '--'} ·{' '}
+                      {intervalTotals.hasDistance ? `${intervalTotals.distanceKm.toFixed(2)} km` : '--'}
+                    </p>
+                  </div>
+                  <div className="goal-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const stepError = validateIntervalsStep();
+                        if (stepError) {
+                          setError(stepError);
+                          return;
+                        }
+                        setError('');
+                        setCurrentStep(4);
+                        setMaxReachedStep((prev) => (prev < 4 ? 4 : prev));
+                      }}
+                    >
+                      Valider les intervalles
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className={`optional-panel ${currentStep === 4 ? 'session-step-panel is-open' : 'session-step-panel'}`}>
+            <header
+              className="session-step-head"
+              role="button"
+              tabIndex={0}
+              onClick={() => goToStep(4)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  goToStep(4);
+                }
+              }}
+            >
+              <span>Distance + durée</span>
+              <small>
+                {Number.isFinite(effectiveDistanceKm) && effectiveDistanceKm > 0
+                  ? `${effectiveDistanceKm.toFixed(2)} km`
+                  : '--'}{' '}
+                · {Number.isFinite(effectiveDurationMin) && effectiveDurationMin > 0 ? `${effectiveDurationMin.toFixed(1)} min` : '--'}
+              </small>
+            </header>
+            {currentStep === 4 ? (
+              <div className="session-step-body">
+                <div className="quick-metrics-row quick-metrics-row--tight">
+                  <label className="field-compact">
+                    Distance (km){isDistanceRequired(form.kind) ? '' : ' (optionnelle pour renfo)'}
+                    <input
+                      type="number"
+                      min={0.1}
+                      step={0.1}
+                      value={form.distanceKm}
+                      onChange={(e) => setField('distanceKm', e.target.value)}
+                      required={isDistanceRequired(form.kind) && !(intervalModeActive && intervalTotals.hasDistance)}
+                    />
+                  </label>
+
+                  <label className="field-compact">
+                    Durée (h/min/sec)
+                    <div className="duration-inputs">
+                      <input
+                        type="number"
+                        aria-label="Durée (heures)"
+                        min={0}
+                        max={23}
+                        value={form.durationHours}
+                        onChange={(e) => setField('durationHours', e.target.value)}
+                        required
+                      />
+                      <input
+                        type="number"
+                        aria-label="Durée (minutes)"
+                        min={0}
+                        max={59}
+                        value={form.durationMinutes}
+                        onChange={(e) => setField('durationMinutes', e.target.value)}
+                        required
+                      />
+                      <input
+                        type="number"
+                        aria-label="Durée (secondes)"
+                        min={0}
+                        max={59}
+                        value={form.durationSeconds}
+                        onChange={(e) => setField('durationSeconds', e.target.value)}
+                        required
+                      />
+                    </div>
+                  </label>
+                </div>
+                <div className="rpe-row">
+                  <label htmlFor="rpe-input-v2">Ressenti global (RPE {form.rpe}/10)</label>
+                  <input
+                    id="rpe-input-v2"
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={form.rpe}
+                    onChange={(e) => setField('rpe', e.target.value)}
+                    aria-label="RPE"
+                  />
+                </div>
+                <div className="goal-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const stepError = validateDistanceDurationStep();
+                      if (stepError) {
+                        setError(stepError);
+                        return;
+                      }
+                      setError('');
+                      setCurrentStep(5);
+                      setMaxReachedStep((prev) => (prev < 5 ? 5 : prev));
+                    }}
+                  >
+                    Valider distance + durée
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+
+          <section className={`optional-panel ${currentStep === 5 ? 'session-step-panel is-open' : 'session-step-panel'}`}>
+            <header
+              className="session-step-head"
+              role="button"
+              tabIndex={0}
+              onClick={() => goToStep(5)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  goToStep(5);
+                }
+              }}
+            >
+              <span>Informations facultatives</span>
+              <small>{form.comment.trim() || form.hrAvg || form.elevationM ? 'Renseignées' : 'Aucune'}</small>
+            </header>
+            {currentStep === 5 ? (
+              <div className="session-step-body">
+                <fieldset className="form-group optional-group">
             <label>
               Fréquence cardiaque moyenne (bpm)
               <input
@@ -596,8 +1124,11 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
                 placeholder="Optionnel: ressenti, météo, points marquants..."
               />
             </label>
-          </fieldset>
-        </details>
+                </fieldset>
+              </div>
+            ) : null}
+          </section>
+        </fieldset>
 
         <div className="smart-summary">
           <p>

@@ -293,7 +293,6 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
   const catalog = getGamificationMissionCatalog();
   const nextProgress = { ...state.missionsUserProgress };
   const nowIso = date.toISOString();
-  const isCatalogMigration = state.missionCatalogVersion !== GAMIFICATION_V1_CONFIG.missionCatalogVersion;
 
   for (const mission of catalog) {
     const rawProgress = evaluateMissionProgress(mission, sessions, date, weekKey, state, signals);
@@ -305,29 +304,9 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
       nextProgress[mission.id] = {
         userId: state.userId,
         missionId: mission.id,
-        progressValue: current?.progressValue ?? 0,
-        unlockBaseline: current?.unlockBaseline ?? rawProgress,
+        progressValue: Math.max(0, rawProgress),
+        unlockBaseline: 0,
         status: 'LOCKED',
-        updatedAt: nowIso,
-        unlockedAt: current?.unlockedAt,
-        claimedAt: current?.claimedAt
-      };
-      continue;
-    }
-
-    if (!current || current.status === 'LOCKED') {
-      const migrationBaseline = isCatalogMigration ? 0 : rawProgress;
-      nextProgress[mission.id] = {
-        userId: state.userId,
-        missionId: mission.id,
-        progressValue: isCatalogMigration ? rawProgress : 0,
-        unlockBaseline: migrationBaseline,
-        status:
-          current?.status === 'CLAIMED'
-            ? 'CLAIMED'
-            : isCatalogMigration && rawProgress >= mission.criterion.target
-              ? 'DONE'
-              : 'IN_PROGRESS',
         updatedAt: nowIso,
         unlockedAt: current?.unlockedAt ?? nowIso,
         claimedAt: current?.claimedAt
@@ -335,38 +314,43 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
       continue;
     }
 
-    if (isCatalogMigration && current.status !== 'CLAIMED') {
+    if (!current) {
+      const initialProgress = Math.max(0, rawProgress);
       nextProgress[mission.id] = {
         userId: state.userId,
         missionId: mission.id,
-        progressValue: rawProgress,
+        progressValue: initialProgress,
         unlockBaseline: 0,
-        status: rawProgress >= mission.criterion.target ? 'DONE' : 'IN_PROGRESS',
+        status:
+          initialProgress >= mission.criterion.target
+            ? 'DONE'
+            : 'IN_PROGRESS',
         updatedAt: nowIso,
-        unlockedAt: current.unlockedAt ?? nowIso,
-        claimedAt: current.claimedAt
+        unlockedAt: nowIso,
+        claimedAt: undefined
       };
       continue;
     }
 
-    const baseline =
-      current.unlockBaseline !== undefined
-        ? current.unlockBaseline
-        : Math.max(0, rawProgress - (current.progressValue ?? 0));
-    const relativeProgress = Math.max(0, rawProgress - baseline);
+    if (current.status === 'CLAIMED') {
+      nextProgress[mission.id] = {
+        ...current,
+        progressValue: Math.max(current.progressValue ?? 0, mission.criterion.target),
+        unlockBaseline: 0,
+        updatedAt: nowIso
+      };
+      continue;
+    }
 
+    const absoluteProgress = Math.max(0, rawProgress);
     const status: MissionProgressStatus =
-      current.status === 'CLAIMED'
-        ? 'CLAIMED'
-        : relativeProgress >= mission.criterion.target
-          ? 'DONE'
-          : 'IN_PROGRESS';
+      absoluteProgress >= mission.criterion.target ? 'DONE' : 'IN_PROGRESS';
 
     nextProgress[mission.id] = {
       userId: state.userId,
       missionId: mission.id,
-      progressValue: relativeProgress,
-      unlockBaseline: baseline,
+      progressValue: absoluteProgress,
+      unlockBaseline: 0,
       status,
       updatedAt: nowIso,
       unlockedAt: current.unlockedAt ?? nowIso,

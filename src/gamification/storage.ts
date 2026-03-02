@@ -3,6 +3,9 @@ import { MONTHLY_CHALLENGE_OPTIONS } from './challengeOptions';
 import { getLevelFromXpV1, getXpToNextLevelV1 } from './levels';
 import { GamificationState, Season } from './types';
 import { alignAscensionSeasonOneTimeline, createDefaultAscensionState } from './ascension';
+import { scopedStorageKey } from '../storage/userScope';
+
+const LEGACY_GAMI_MIGRATION_KEY = 'sport-gamification-v1-migrated';
 
 function getDateKey(date: Date): string {
   const yyyy = date.getFullYear();
@@ -327,7 +330,8 @@ export function normalizeGamificationState(input: unknown): GamificationState {
 
 export function loadGamificationState(): GamificationState {
   try {
-    const raw = localStorage.getItem(GAMIFICATION_V1_CONFIG.storageKey);
+    const storageKey = scopedStorageKey(GAMIFICATION_V1_CONFIG.storageKey);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return createDefaultGamificationState();
     return normalizeGamificationState(JSON.parse(raw));
   } catch {
@@ -336,9 +340,30 @@ export function loadGamificationState(): GamificationState {
 }
 
 export function saveGamificationState(state: GamificationState): void {
-  localStorage.setItem(GAMIFICATION_V1_CONFIG.storageKey, JSON.stringify(state));
+  const storageKey = scopedStorageKey(GAMIFICATION_V1_CONFIG.storageKey);
+  localStorage.setItem(storageKey, JSON.stringify(state));
 }
 
 export function resetGamificationState(): void {
-  localStorage.removeItem(GAMIFICATION_V1_CONFIG.storageKey);
+  const storageKey = scopedStorageKey(GAMIFICATION_V1_CONFIG.storageKey);
+  localStorage.removeItem(storageKey);
 }
+
+function migrateLegacyGamificationIfNeeded(): void {
+  try {
+    if (localStorage.getItem(LEGACY_GAMI_MIGRATION_KEY) === '1') return;
+    const storageKey = scopedStorageKey(GAMIFICATION_V1_CONFIG.storageKey);
+    if (!localStorage.getItem(storageKey)) {
+      const legacyRaw = localStorage.getItem(GAMIFICATION_V1_CONFIG.storageKey);
+      if (legacyRaw) {
+        localStorage.setItem(storageKey, legacyRaw);
+      }
+    }
+    localStorage.removeItem(GAMIFICATION_V1_CONFIG.storageKey);
+    localStorage.setItem(LEGACY_GAMI_MIGRATION_KEY, '1');
+  } catch {
+    // no-op
+  }
+}
+
+migrateLegacyGamificationIfNeeded();

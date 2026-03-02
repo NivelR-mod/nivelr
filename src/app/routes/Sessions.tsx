@@ -25,6 +25,7 @@ export default function Sessions({
   const [periodFilter, setPeriodFilter] = useState<'ALL' | '7D' | '30D'>('ALL');
   const [sortBy, setSortBy] = useState<'DATE_DESC' | 'XP_DESC' | 'DURATION_DESC'>('DATE_DESC');
   const [minDuration, setMinDuration] = useState<string>('');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
 
@@ -85,102 +86,122 @@ export default function Sessions({
           className="card sessions-filters sessions-filters-photo premium-section"
           style={{ '--sessions-filters-bg-image': `url(${sessionsFiltersBg})` } as CSSProperties}
         >
-          <h2>Filtres</h2>
-          <div className="sessions-filters-grid">
-            <label>
-              Recherche (sport, sous-type, commentaire)
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Ex: running, EF, plaisir..."
-              />
-            </label>
-
-            <label>
-              Sport
-              <select
-                value={sportFilter}
-                onChange={(e) =>
-                  setSportFilter(e.target.value as 'ALL' | 'RUNNING' | 'OTHER')
-                }
-              >
-                <option value="ALL">Tous</option>
-                <option value="RUNNING">RUNNING</option>
-                <option value="OTHER">OTHER</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="sessions-filters-actions">
-            <button type="button" onClick={() => setShowAdvancedFilters((prev) => !prev)}>
-              {showAdvancedFilters ? 'Masquer recherche approfondie' : 'Recherche approfondie'}
+          <div className="sessions-filters-head">
+            <h2>Filtres</h2>
+            <button
+              type="button"
+              className={`sessions-filters-toggle ${mobileFiltersOpen ? 'is-open' : ''}`}
+              onClick={() => setMobileFiltersOpen((prev) => !prev)}
+              aria-expanded={mobileFiltersOpen}
+              aria-controls="sessions-filters-body"
+            >
+              <span>{mobileFiltersOpen ? 'Réduire' : 'Agrandir'}</span>
+              <span aria-hidden="true">{mobileFiltersOpen ? '▴' : '▾'}</span>
             </button>
           </div>
 
-          {showAdvancedFilters ? (
+          <div
+            id="sessions-filters-body"
+            className={`sessions-filters-body ${mobileFiltersOpen ? 'is-open' : ''}`}
+          >
             <div className="sessions-filters-grid">
               <label>
-                Période
-                <select
-                  value={periodFilter}
-                  onChange={(e) => setPeriodFilter(e.target.value as 'ALL' | '7D' | '30D')}
-                >
-                  <option value="ALL">Toutes</option>
-                  <option value="7D">7 derniers jours</option>
-                  <option value="30D">30 derniers jours</option>
-                </select>
-              </label>
-
-              <label>
-                Tri
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'DATE_DESC' | 'XP_DESC' | 'DURATION_DESC')}
-                >
-                  <option value="DATE_DESC">Plus récentes</option>
-                  <option value="XP_DESC">XP décroissant</option>
-                  <option value="DURATION_DESC">Durée décroissante</option>
-                </select>
-              </label>
-
-              <label>
-                Durée min (minutes)
+                Recherche (sport, sous-type, commentaire)
                 <input
-                  type="number"
-                  min={0}
-                  value={minDuration}
-                  onChange={(e) => setMinDuration(e.target.value)}
-                  placeholder="Ex: 30"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Ex: running, EF, plaisir..."
                 />
               </label>
 
               <label>
-                Sous-type
-                <select value={subtypeFilter} onChange={(e) => setSubtypeFilter(e.target.value)}>
-                  {subtypeOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'ALL' ? 'Tous' : option}
-                    </option>
-                  ))}
+                Sport
+                <select
+                  value={sportFilter}
+                  onChange={(e) =>
+                    setSportFilter(e.target.value as 'ALL' | 'RUNNING' | 'OTHER')
+                  }
+                >
+                  <option value="ALL">Tous</option>
+                  <option value="RUNNING">RUNNING</option>
+                  <option value="OTHER">OTHER</option>
                 </select>
               </label>
             </div>
-          ) : null}
 
-          <div className="sessions-filters-actions">
-            <p>
-              Résultats : <strong>{filtered.length}</strong> / {state.sessions.length}
-            </p>
-            <p>
-              Charge filtrée : <strong>{filteredMinutes} min</strong> · <strong>{filteredXp} XP</strong>
-            </p>
-            <button type="button" onClick={resetFilters}>
-              Réinitialiser les filtres
-            </button>
-            <button type="button" onClick={() => onExportFiltered(filtered)}>
-              Exporter ce résultat
-            </button>
+            <div className="sessions-filters-actions">
+              <button type="button" onClick={() => setShowAdvancedFilters((prev) => !prev)}>
+                {showAdvancedFilters ? 'Masquer recherche approfondie' : 'Recherche approfondie'}
+              </button>
+            </div>
+
+            {showAdvancedFilters ? (
+              <div className="sessions-filters-grid">
+                <label>
+                  Période
+                  <select
+                    value={periodFilter}
+                    onChange={(e) => setPeriodFilter(e.target.value as 'ALL' | '7D' | '30D')}
+                  >
+                    <option value="ALL">Toutes</option>
+                    <option value="7D">7 derniers jours</option>
+                    <option value="30D">30 derniers jours</option>
+                  </select>
+                </label>
+
+                <label>
+                  Tri
+                  <select
+                    value={sortBy}
+                    onChange={(e) =>
+                      setSortBy(e.target.value as 'DATE_DESC' | 'XP_DESC' | 'DURATION_DESC')
+                    }
+                  >
+                    <option value="DATE_DESC">Plus récentes</option>
+                    <option value="XP_DESC">XP décroissant</option>
+                    <option value="DURATION_DESC">Durée décroissante</option>
+                  </select>
+                </label>
+
+                <label>
+                  Durée min (minutes)
+                  <input
+                    type="number"
+                    min={0}
+                    value={minDuration}
+                    onChange={(e) => setMinDuration(e.target.value)}
+                    placeholder="Ex: 30"
+                  />
+                </label>
+
+                <label>
+                  Sous-type
+                  <select value={subtypeFilter} onChange={(e) => setSubtypeFilter(e.target.value)}>
+                    {subtypeOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option === 'ALL' ? 'Tous' : option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+
+            <div className="sessions-filters-actions">
+              <p>
+                Résultats : <strong>{filtered.length}</strong> / {state.sessions.length}
+              </p>
+              <p>
+                Charge filtrée : <strong>{filteredMinutes} min</strong> · <strong>{filteredXp} XP</strong>
+              </p>
+              <button type="button" onClick={resetFilters}>
+                Réinitialiser les filtres
+              </button>
+              <button type="button" onClick={() => onExportFiltered(filtered)}>
+                Exporter ce résultat
+              </button>
+            </div>
           </div>
         </article>
       ) : null}
