@@ -6486,13 +6486,27 @@ textarea::placeholder {
   gap: 0.9rem;
 }
 
+.coach-hero-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(150deg, rgba(7, 18, 28, 0.88), rgba(8, 15, 24, 0.9)),
+    url('/Coach.jpg') center/cover no-repeat;
+  border-color: rgba(114, 200, 196, 0.34) !important;
+}
+
+.coach-hero-card > * {
+  position: relative;
+  z-index: 1;
+}
+
 .coach-medical-warning {
   margin: 0;
   padding: 0.75rem 0.85rem;
   border-radius: 12px;
-  border: 1px solid #f0d8a2;
-  background: #fff7e6;
-  color: #6f4f18;
+  border: 1px solid rgba(247, 194, 123, 0.55) !important;
+  background: linear-gradient(165deg, rgba(54, 38, 18, 0.78), rgba(33, 24, 12, 0.84)) !important;
+  color: #ffd7a6 !important;
   font-weight: 600;
 }
 
