@@ -6476,3 +6476,137 @@ textarea::placeholder {
     transform: translateX(0);
   }
 }
+
+.coach-page {
+  gap: 1rem;
+}
+
+.coach-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.coach-medical-warning {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid #f0d8a2;
+  background: #fff7e6;
+  color: #6f4f18;
+  font-weight: 600;
+}
+
+.coach-cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border: 1px solid rgba(114, 200, 196, 0.32);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 0.95rem;
+  background: linear-gradient(165deg, rgba(14, 30, 36, 0.84), rgba(9, 17, 24, 0.9));
+}
+
+.coach-cta-row.is-secondary {
+  border-style: dashed;
+  background: linear-gradient(165deg, rgba(18, 32, 42, 0.8), rgba(10, 19, 27, 0.86));
+}
+
+.coach-cta-row p {
+  margin: 0;
+}
+
+.coach-program-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #173447;
+}
+
+.coach-program-hint {
+  margin-top: 0.2rem;
+  color: #b3d1d9;
+  font-size: 0.9rem;
+}
+
+.coach-feedback-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.coach-intake-form h2 {
+  margin: 0.2rem 0 0;
+}
+
+.coach-intake-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.coach-intake-grid label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.coach-intake-form input,
+.coach-intake-form select,
+.coach-intake-form textarea {
+  background: rgba(8, 18, 24, 0.78);
+  border-color: rgba(114, 200, 196, 0.32);
+  color: #eefbff;
+}
+
+.coach-intake-form input::placeholder,
+.coach-intake-form textarea::placeholder {
+  color: #9abcc7;
+}
+
+.coach-intake-grid textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.coach-field-helper {
+  color: #a8c7d0;
+  font-size: 0.82rem;
+}
+
+.coach-inline-choice {
+  border: 1px solid rgba(114, 200, 196, 0.32);
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(7, 15, 22, 0.72);
+  display: grid;
+  gap: 0.44rem;
+}
+
+.coach-inline-choice legend {
+  padding: 0 0.2rem;
+  color: #d6edf3;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.coach-inline-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .coach-cta-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .coach-cta-row button,
+  .coach-cta-row .btn-compact {
+    width: 100%;
+    text-align: center;
+  }
+
+  .coach-intake-grid {
+    grid-template-columns: 1fr;
+  }
+}
