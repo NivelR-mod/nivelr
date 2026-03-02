@@ -52,16 +52,19 @@ async function sendWithWeb3Forms(payload: ContactEmailPayload): Promise<{ ok: bo
 
 export async function sendContactEmail(payload: ContactEmailPayload): Promise<{ ok: boolean; error?: string }> {
   const web3FormsKey = import.meta.env.VITE_WEB3FORMS_ACCESS_KEY?.trim();
+  const functionUrl = getSupabaseFunctionUrl();
+
   if (web3FormsKey) {
-    return sendWithWeb3Forms(payload);
+    const web3formsResult = await sendWithWeb3Forms(payload);
+    if (web3formsResult.ok || !functionUrl) {
+      return web3formsResult;
+    }
   }
 
-  const functionUrl = getSupabaseFunctionUrl();
   if (!functionUrl) {
     return {
       ok: false,
-      error:
-        "Configuration manquante: ajoute VITE_WEB3FORMS_ACCESS_KEY (recommandé) ou configure la fonction Supabase."
+      error: "Configuration manquante: ajoute VITE_WEB3FORMS_ACCESS_KEY ou configure VITE_CONTACT_FUNCTION_URL."
     };
   }
 
