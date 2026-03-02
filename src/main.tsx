@@ -20,6 +20,8 @@ import CookiesPolicy from './app/routes/CookiesPolicy';
 import TermsOfUse from './app/routes/TermsOfUse';
 import ContactLegal from './app/routes/ContactLegal';
 import RunnerAssessment from './app/routes/RunnerAssessment';
+import Coach from './app/routes/Coach';
+import CoachQuestionnaire from './app/routes/CoachQuestionnaire';
 import {
   canUseModoForCurrentSession,
   getCurrentSessionUser,
@@ -933,7 +935,11 @@ function App(): JSX.Element {
 
   return (
     <BrowserRouter>
-      <div className={`app-shell ${sessionUser ? 'is-authenticated' : 'is-guest'}`}>
+      <div
+        className={`app-shell ${sessionUser ? 'is-authenticated' : 'is-guest'} ${
+          mustCompleteRunnerAssessment ? 'is-assessment-locked' : ''
+        }`}
+      >
         {sessionUser ? (
           <aside className="app-sidebar">
             <div className="brand-block">
@@ -1057,6 +1063,7 @@ function App(): JSX.Element {
                   {badgesNotifCount > 0 ? <small className="nav-count">{badgesNotifCount}</small> : null}
                 </span>
               </NavLink>
+              <NavLink to="/coach">Coach</NavLink>
               <NavLink to="/guide-xp">Guide XP</NavLink>
             </nav>
 
@@ -1156,6 +1163,7 @@ function App(): JSX.Element {
                 Objectif perso
               </NavLink>
               <NavLink to="/badges">Badges</NavLink>
+              <NavLink to="/coach">Coach</NavLink>
               <NavLink to="/guide-xp">Guide XP</NavLink>
             </nav>
           ) : null}
@@ -1479,6 +1487,26 @@ function App(): JSX.Element {
               <Route path="/cookies" element={gateWithRunnerAssessment(<CookiesPolicy />)} />
               <Route path="/cgu" element={gateWithRunnerAssessment(<TermsOfUse />)} />
               <Route path="/contact" element={gateWithRunnerAssessment(<ContactLegal />)} />
+              <Route
+                path="/coach"
+                element={gateWithRunnerAssessment(
+                  sessionUser ? (
+                    <Coach />
+                  ) : (
+                    renderAuthLockedPage('Coach', 'Connecte-toi pour accéder à ton programme personnalisé.')
+                  )
+                )}
+              />
+              <Route
+                path="/coach/test"
+                element={gateWithRunnerAssessment(
+                  sessionUser ? (
+                    <CoachQuestionnaire />
+                  ) : (
+                    renderAuthLockedPage('Coach', 'Connecte-toi pour démarrer le questionnaire.')
+                  )
+                )}
+              />
             </Routes>
             <CookieConsentModal />
           </main>

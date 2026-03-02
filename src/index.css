@@ -60,6 +60,16 @@ html,
   grid-template-columns: minmax(0, 1fr);
 }
 
+.app-shell.is-assessment-locked .app-sidebar,
+.app-shell.is-assessment-locked .topbar,
+.app-shell.is-assessment-locked .mobile-user-nav,
+.app-shell.is-assessment-locked .app-legal-footer {
+  filter: blur(4px) grayscale(0.45) brightness(0.75);
+  opacity: 0.38;
+  pointer-events: none;
+  user-select: none;
+}
+
 .app-sidebar {
   position: sticky;
   top: 1rem;
