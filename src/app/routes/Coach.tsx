@@ -91,9 +91,6 @@ export default function Coach(): JSX.Element {
   return (
     <section className="page coach-page">
       <h1>Coach</h1>
-      <p className="page-subtitle">
-        Programme personnalisé semaine par semaine, construit à partir de ton profil et de ton retour réel.
-      </p>
 
       <article className="card premium-section coach-card coach-hero-card">
         <h2>Avant de commencer</h2>
