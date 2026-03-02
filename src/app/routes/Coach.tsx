@@ -16,7 +16,15 @@ export default function Coach(): JSX.Element {
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [error, setError] = useState('');
   const [hubData, setHubData] = useState<CoachHubData | null>(null);
-  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSessions, setFeedbackSessions] = useState('');
+  const [feedbackDistance, setFeedbackDistance] = useState('');
+  const [feedbackDuration, setFeedbackDuration] = useState('');
+  const [feedbackPace, setFeedbackPace] = useState('');
+  const [feedbackRpe, setFeedbackRpe] = useState('');
+  const [feedbackFatigue, setFeedbackFatigue] = useState('');
+  const [feedbackPain, setFeedbackPain] = useState('');
+  const [feedbackGeneralFeeling, setFeedbackGeneralFeeling] = useState('');
+  const [feedbackNotes, setFeedbackNotes] = useState('');
   const [readyForNextWeek, setReadyForNextWeek] = useState(true);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
 
@@ -63,18 +71,43 @@ export default function Coach(): JSX.Element {
   const onSubmitFeedback = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (!hubData?.activeProgram) return;
-    const trimmedFeedback = feedbackText.trim();
-    if (trimmedFeedback.length < 20) {
-      setError('Ton retour doit contenir au moins 20 caractères.');
+
+    const sessions = feedbackSessions.trim();
+    const distance = feedbackDistance.trim();
+    const duration = feedbackDuration.trim();
+    const pace = feedbackPace.trim();
+    const rpe = feedbackRpe.trim();
+    const fatigue = feedbackFatigue.trim();
+    const pain = feedbackPain.trim();
+    const generalFeeling = feedbackGeneralFeeling.trim();
+    const notes = feedbackNotes.trim();
+
+    if (!sessions || !distance || !duration || !pace || !rpe || !fatigue || !pain || !generalFeeling) {
+      setError('Merci de compléter les champs essentiels du retour de semaine.');
       return;
     }
+
+    const structuredFeedback = [
+      '=== RETOUR DE SEMAINE ===',
+      `Séance X: ${sessions}`,
+      `Distances: ${distance}`,
+      `Temps: ${duration}`,
+      `Rythme (min/km): ${pace}`,
+      `RPE moyen: ${rpe}`,
+      `Fatigue (1-5): ${fatigue}`,
+      `Douleurs éventuelles: ${pain}`,
+      '',
+      '=== RETOUR GÉNÉRAL ===',
+      `Sensations générales: ${generalFeeling}`,
+      `Notes libres sur la semaine: ${notes || 'Aucune note libre'}`
+    ].join('\n');
 
     setError('');
     setFeedbackSuccess('');
     setSendingFeedback(true);
     const result = await submitCoachFeedback({
       weekNumber: hubData.activeProgram.weekNumber,
-      feedbackText: trimmedFeedback,
+      feedbackText: structuredFeedback,
       readyForNextWeek
     });
     setSendingFeedback(false);
@@ -83,7 +116,15 @@ export default function Coach(): JSX.Element {
       return;
     }
 
-    setFeedbackText('');
+    setFeedbackSessions('');
+    setFeedbackDistance('');
+    setFeedbackDuration('');
+    setFeedbackPace('');
+    setFeedbackRpe('');
+    setFeedbackFatigue('');
+    setFeedbackPain('');
+    setFeedbackGeneralFeeling('');
+    setFeedbackNotes('');
     setFeedbackSuccess('Retour envoyé. Ton coach peut préparer la semaine suivante.');
     await refreshCoachData();
   };
@@ -153,21 +194,103 @@ export default function Coach(): JSX.Element {
         <article className="card premium-section coach-card">
           <h2>Retour de semaine</h2>
           <p>
-            Pour recevoir la semaine suivante, envoie ton feedback sur la semaine en cours (ressenti, charge,
-            difficultés, points réussis).
+            Pour recevoir la semaine suivante, complète ce retour guidé sur ta semaine en cours.
           </p>
           <form className="form coach-feedback-form" onSubmit={(event) => void onSubmitFeedback(event)}>
-            <label>
-              Ton retour
-              <textarea
-                value={feedbackText}
-                onChange={(event) => setFeedbackText(event.target.value)}
-                className="contact-message"
-                placeholder="Ex: J’ai tenu 3 séances, fatigue modérée sur la sortie longue..."
-                minLength={20}
-                required
-              />
-            </label>
+            <div className="coach-feedback-grid">
+              <label>
+                Séance X
+                <input
+                  value={feedbackSessions}
+                  onChange={(event) => setFeedbackSessions(event.target.value)}
+                  placeholder="Ex: 3 séances"
+                  required
+                />
+              </label>
+              <label>
+                Distances
+                <input
+                  value={feedbackDistance}
+                  onChange={(event) => setFeedbackDistance(event.target.value)}
+                  placeholder="Ex: 24 km"
+                  required
+                />
+              </label>
+              <label>
+                Temps
+                <input
+                  value={feedbackDuration}
+                  onChange={(event) => setFeedbackDuration(event.target.value)}
+                  placeholder="Ex: 2h20"
+                  required
+                />
+              </label>
+              <label>
+                Rythme (min/km)
+                <input
+                  value={feedbackPace}
+                  onChange={(event) => setFeedbackPace(event.target.value)}
+                  placeholder="Ex: 6:05"
+                  required
+                />
+              </label>
+              <label>
+                RPE moyen
+                <select value={feedbackRpe} onChange={(event) => setFeedbackRpe(event.target.value)} required>
+                  <option value="">Choisir</option>
+                  <option value="1">1 - Très facile</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5 - Modéré</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                  <option value="9">9</option>
+                  <option value="10">10 - Maximal</option>
+                </select>
+              </label>
+              <label>
+                Fatigue (1-5)
+                <select value={feedbackFatigue} onChange={(event) => setFeedbackFatigue(event.target.value)} required>
+                  <option value="">Choisir</option>
+                  <option value="1">1 - Très faible</option>
+                  <option value="2">2 - Faible</option>
+                  <option value="3">3 - Moyenne</option>
+                  <option value="4">4 - Élevée</option>
+                  <option value="5">5 - Très élevée</option>
+                </select>
+              </label>
+              <label className="coach-feedback-field-full">
+                Douleurs éventuelles
+                <textarea
+                  value={feedbackPain}
+                  onChange={(event) => setFeedbackPain(event.target.value)}
+                  className="contact-message"
+                  placeholder="Ex: gêne légère mollet droit après la séance 2"
+                  required
+                />
+              </label>
+              <label className="coach-feedback-field-full">
+                Sensations générales
+                <textarea
+                  value={feedbackGeneralFeeling}
+                  onChange={(event) => setFeedbackGeneralFeeling(event.target.value)}
+                  className="contact-message"
+                  placeholder="Ex: semaine plutôt maîtrisée, bon ressenti global"
+                  required
+                />
+              </label>
+              <label className="coach-feedback-field-full">
+                Notes libres sur la semaine
+                <textarea
+                  value={feedbackNotes}
+                  onChange={(event) => setFeedbackNotes(event.target.value)}
+                  className="contact-message"
+                  placeholder="Ex: contraintes pro, météo, matériel, envie..."
+                />
+              </label>
+            </div>
             <label className="auth-checkbox-row">
               <input
                 type="checkbox"

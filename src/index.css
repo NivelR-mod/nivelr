@@ -6588,6 +6588,34 @@ textarea::placeholder {
   gap: 0.75rem;
 }
 
+.coach-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.coach-feedback-grid label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.coach-feedback-grid input,
+.coach-feedback-grid select,
+.coach-feedback-grid textarea {
+  background: rgba(8, 18, 24, 0.78);
+  border-color: rgba(114, 200, 196, 0.32);
+  color: #eefbff;
+}
+
+.coach-feedback-grid textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.coach-feedback-field-full {
+  grid-column: 1 / -1;
+}
+
 .coach-intake-form h2 {
   margin: 0.2rem 0 0;
 }
@@ -6662,6 +6690,10 @@ textarea::placeholder {
   }
 
   .coach-intake-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-feedback-grid {
     grid-template-columns: 1fr;
   }
 }
