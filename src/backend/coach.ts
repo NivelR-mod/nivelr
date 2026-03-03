@@ -122,19 +122,6 @@ function asDirectSignedUrl(inputPath: string): string | null {
   }
 }
 
-function buildPublicObjectUrl(bucket: string, path: string): string | null {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-  if (!supabaseUrl) return null;
-  const cleanBase = supabaseUrl.replace(/\/+$/, '');
-  const encodedPath = path
-    .split('/')
-    .filter(Boolean)
-    .map((part) => encodeURIComponent(part))
-    .join('/');
-  if (!encodedPath) return null;
-  return `${cleanBase}/storage/v1/object/public/${bucket}/${encodedPath}`;
-}
-
 export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubData; error?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
@@ -207,8 +194,8 @@ export async function saveCoachIntake(answers: Record<string, unknown>): Promise
 }
 
 export async function openCoachProgramPdf(
-  program: Pick<CoachProgramSummary, 'storageBucket' | 'storagePath'>,
-  _expiresInSeconds = 900
+  program: Pick<CoachProgramSummary, 'id' | 'storageBucket' | 'storagePath'>,
+  expiresInSeconds = 900
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
@@ -220,17 +207,25 @@ export async function openCoachProgramPdf(
     return { ok: true, url: directSignedUrl };
   }
 
+  const invoke = await supabase!.functions.invoke<{
+    url?: string;
+    error?: string;
+  }>('get-coach-program-url', {
+    body: { programId: program.id, expiresIn: expiresInSeconds }
+  });
+  if (!invoke.error && invoke.data?.url) {
+    return { ok: true, url: invoke.data.url };
+  }
+
   const normalizedPath = normalizeStoragePath(program.storagePath, normalizedBucket);
-  // Mode simple et stable: on ouvre l'URL publique directe du PDF.
-  if (program.storagePath.trim().startsWith('http://') || program.storagePath.trim().startsWith('https://')) {
-    return { ok: true, url: program.storagePath.trim() };
-  }
   const bucketCandidates = Array.from(new Set([normalizedBucket, DEFAULT_STORAGE_BUCKET, 'coach-programs']));
+  let lastError = invoke.error?.message;
   for (const bucket of bucketCandidates) {
-    const url = buildPublicObjectUrl(bucket, normalizedPath);
-    if (url) return { ok: true, url };
+    const { data, error } = await supabase!.storage.from(bucket).createSignedUrl(normalizedPath, expiresInSeconds);
+    if (!error && data?.signedUrl) return { ok: true, url: data.signedUrl };
+    lastError = error?.message ?? lastError;
   }
-  return { ok: false, error: 'Programme PDF indisponible.' };
+  return { ok: false, error: invoke.data?.error ?? lastError ?? 'Programme PDF indisponible.' };
 }
 
 export async function submitCoachFeedback(input: {
