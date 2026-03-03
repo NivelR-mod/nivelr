@@ -122,6 +122,19 @@ function asDirectSignedUrl(inputPath: string): string | null {
   }
 }
 
+function buildPublicObjectUrl(bucket: string, path: string): string | null {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  if (!supabaseUrl) return null;
+  const cleanBase = supabaseUrl.replace(/\/+$/, '');
+  const encodedPath = path
+    .split('/')
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+  if (!encodedPath) return null;
+  return `${cleanBase}/storage/v1/object/public/${bucket}/${encodedPath}`;
+}
+
 export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubData; error?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
@@ -195,7 +208,7 @@ export async function saveCoachIntake(answers: Record<string, unknown>): Promise
 
 export async function openCoachProgramPdf(
   program: Pick<CoachProgramSummary, 'storageBucket' | 'storagePath'>,
-  expiresInSeconds = 900
+  _expiresInSeconds = 900
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
@@ -208,30 +221,16 @@ export async function openCoachProgramPdf(
   }
 
   const normalizedPath = normalizeStoragePath(program.storagePath, normalizedBucket);
-  const bucketCandidates = Array.from(new Set([normalizedBucket, DEFAULT_STORAGE_BUCKET, 'coach-programs']));
-
-  let lastError: string | undefined;
-  for (const bucket of bucketCandidates) {
-    const { data, error } = await supabase!.storage.from(bucket).createSignedUrl(normalizedPath, expiresInSeconds);
-    if (!error && data?.signedUrl) {
-      return { ok: true, url: data.signedUrl };
-    }
-    lastError = error?.message ?? lastError;
-  }
-
-  // Fallback utile si bucket public ou si le path est déjà une URL directe.
+  // Mode simple et stable: on ouvre l'URL publique directe du PDF.
   if (program.storagePath.trim().startsWith('http://') || program.storagePath.trim().startsWith('https://')) {
     return { ok: true, url: program.storagePath.trim() };
   }
-
+  const bucketCandidates = Array.from(new Set([normalizedBucket, DEFAULT_STORAGE_BUCKET, 'coach-programs']));
   for (const bucket of bucketCandidates) {
-    const publicUrl = supabase!.storage.from(bucket).getPublicUrl(normalizedPath).data.publicUrl;
-    if (publicUrl) {
-      return { ok: true, url: publicUrl };
-    }
+    const url = buildPublicObjectUrl(bucket, normalizedPath);
+    if (url) return { ok: true, url };
   }
-
-  return { ok: false, error: lastError ?? 'Programme PDF indisponible.' };
+  return { ok: false, error: 'Programme PDF indisponible.' };
 }
 
 export async function submitCoachFeedback(input: {
