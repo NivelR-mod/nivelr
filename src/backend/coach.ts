@@ -86,6 +86,20 @@ function normalizeStoragePath(inputPath: string, bucket: string): string {
   return withoutLeadingSlash;
 }
 
+function asDirectSignedUrl(inputPath: string): string | null {
+  const raw = inputPath.trim();
+  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return null;
+  try {
+    const url = new URL(raw);
+    const isSupabaseSignedObject = url.pathname.includes('/storage/v1/object/sign/');
+    if (!isSupabaseSignedObject) return null;
+    if (!url.searchParams.get('token')) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
 export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubData; error?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
@@ -165,15 +179,31 @@ export async function openCoachProgramPdf(
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
   }
 
+  const directSignedUrl = asDirectSignedUrl(program.storagePath);
+  if (directSignedUrl) {
+    return { ok: true, url: directSignedUrl };
+  }
+
   const normalizedPath = normalizeStoragePath(program.storagePath, program.storageBucket);
   const { data, error } = await supabase!
     .storage.from(program.storageBucket)
     .createSignedUrl(normalizedPath, expiresInSeconds);
 
-  if (error || !data?.signedUrl) {
-    return { ok: false, error: error?.message ?? 'Programme PDF indisponible.' };
+  if (!error && data?.signedUrl) {
+    return { ok: true, url: data.signedUrl };
   }
-  return { ok: true, url: data.signedUrl };
+
+  // Fallback utile si bucket public ou si le path est déjà une URL directe.
+  if (program.storagePath.trim().startsWith('http://') || program.storagePath.trim().startsWith('https://')) {
+    return { ok: true, url: program.storagePath.trim() };
+  }
+
+  const publicUrl = supabase!.storage.from(program.storageBucket).getPublicUrl(normalizedPath).data.publicUrl;
+  if (publicUrl) {
+    return { ok: true, url: publicUrl };
+  }
+
+  return { ok: false, error: error?.message ?? 'Programme PDF indisponible.' };
 }
 
 export async function submitCoachFeedback(input: {
