@@ -34,6 +34,28 @@ type CoachFeedbackRow = {
 
 const DEFAULT_STORAGE_BUCKET = (import.meta.env.VITE_COACH_STORAGE_BUCKET ?? 'coach-programs').trim();
 
+function normalizeBucketName(input: string): string {
+  const raw = (input ?? '').trim();
+  if (!raw) return DEFAULT_STORAGE_BUCKET;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const url = new URL(raw);
+      const marker = '/storage/v1/object/';
+      const markerIndex = url.pathname.indexOf(marker);
+      if (markerIndex >= 0) {
+        const tail = url.pathname.slice(markerIndex + marker.length);
+        const parts = tail.split('/').filter(Boolean);
+        if (parts.length >= 2) {
+          return parts[1].trim();
+        }
+      }
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
 function canUseCoachCloud(): boolean {
   return Boolean(isRemoteAuthEnabledLocal() && supabase);
 }
@@ -49,7 +71,7 @@ function mapProgramRow(row: CoachProgramRow): CoachProgramSummary {
     weekNumber: row.week_number,
     title: (row.title ?? '').trim() || `Programme semaine ${row.week_number}`,
     description: (row.description ?? '').trim(),
-    storageBucket: (row.storage_bucket ?? '').trim() || DEFAULT_STORAGE_BUCKET,
+    storageBucket: normalizeBucketName((row.storage_bucket ?? '').trim() || DEFAULT_STORAGE_BUCKET),
     storagePath: row.storage_path,
     publishedAt: row.published_at
   };
@@ -179,18 +201,22 @@ export async function openCoachProgramPdf(
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
   }
 
+  const normalizedBucket = normalizeBucketName(program.storageBucket);
   const directSignedUrl = asDirectSignedUrl(program.storagePath);
   if (directSignedUrl) {
     return { ok: true, url: directSignedUrl };
   }
 
-  const normalizedPath = normalizeStoragePath(program.storagePath, program.storageBucket);
-  const { data, error } = await supabase!
-    .storage.from(program.storageBucket)
-    .createSignedUrl(normalizedPath, expiresInSeconds);
+  const normalizedPath = normalizeStoragePath(program.storagePath, normalizedBucket);
+  const bucketCandidates = Array.from(new Set([normalizedBucket, DEFAULT_STORAGE_BUCKET, 'coach-programs']));
 
-  if (!error && data?.signedUrl) {
-    return { ok: true, url: data.signedUrl };
+  let lastError: string | undefined;
+  for (const bucket of bucketCandidates) {
+    const { data, error } = await supabase!.storage.from(bucket).createSignedUrl(normalizedPath, expiresInSeconds);
+    if (!error && data?.signedUrl) {
+      return { ok: true, url: data.signedUrl };
+    }
+    lastError = error?.message ?? lastError;
   }
 
   // Fallback utile si bucket public ou si le path est déjà une URL directe.
@@ -198,12 +224,14 @@ export async function openCoachProgramPdf(
     return { ok: true, url: program.storagePath.trim() };
   }
 
-  const publicUrl = supabase!.storage.from(program.storageBucket).getPublicUrl(normalizedPath).data.publicUrl;
-  if (publicUrl) {
-    return { ok: true, url: publicUrl };
+  for (const bucket of bucketCandidates) {
+    const publicUrl = supabase!.storage.from(bucket).getPublicUrl(normalizedPath).data.publicUrl;
+    if (publicUrl) {
+      return { ok: true, url: publicUrl };
+    }
   }
 
-  return { ok: false, error: error?.message ?? 'Programme PDF indisponible.' };
+  return { ok: false, error: lastError ?? 'Programme PDF indisponible.' };
 }
 
 export async function submitCoachFeedback(input: {
