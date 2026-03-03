@@ -42,6 +42,49 @@ function normalizeStoragePath(rawPath: string, bucket: string): string {
   return withoutLeadingSlash;
 }
 
+async function resolveObjectPathWithFallback(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  normalizedPath: string
+): Promise<string> {
+  const exactTry = await admin.storage.from(bucket).createSignedUrl(normalizedPath, 60);
+  if (!exactTry.error && exactTry.data?.signedUrl) {
+    return normalizedPath;
+  }
+
+  const { data: objectRows, error: lookupError } = await admin
+    .schema('storage')
+    .from('objects')
+    .select('name')
+    .eq('bucket_id', bucket)
+    .ilike('name', normalizedPath)
+    .limit(1);
+
+  if (!lookupError && objectRows && objectRows.length > 0) {
+    const fallbackName = (objectRows[0] as { name: string }).name;
+    if (fallbackName?.trim()) return fallbackName.trim();
+  }
+
+  // Fallback supplémentaire: essaye la variante Users/... si users/... a été fourni.
+  if (normalizedPath.startsWith('users/')) {
+    const alt = `Users/${normalizedPath.slice('users/'.length)}`;
+    const altTry = await admin.storage.from(bucket).createSignedUrl(alt, 60);
+    if (!altTry.error && altTry.data?.signedUrl) {
+      return alt;
+    }
+  }
+
+  if (normalizedPath.startsWith('Users/')) {
+    const alt = `users/${normalizedPath.slice('Users/'.length)}`;
+    const altTry = await admin.storage.from(bucket).createSignedUrl(alt, 60);
+    if (!altTry.error && altTry.data?.signedUrl) {
+      return alt;
+    }
+  }
+
+  return normalizedPath;
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -116,9 +159,28 @@ Deno.serve(async (request) => {
 
     const bucket = (program.storage_bucket ?? '').trim() || 'coach-programs';
     const path = normalizeStoragePath(program.storage_path, bucket);
-    const { data: signed, error: signedError } = await admin.storage.from(bucket).createSignedUrl(path, signedUrlTtl);
+    const resolvedPath = await resolveObjectPathWithFallback(admin, bucket, path);
+    const { data: signed, error: signedError } = await admin
+      .storage.from(bucket)
+      .createSignedUrl(resolvedPath, signedUrlTtl);
     if (signedError || !signed?.signedUrl) {
-      return new Response(JSON.stringify({ error: 'sign_url_failed', detail: signedError?.message ?? null }), {
+      return new Response(
+        JSON.stringify({
+          error: 'sign_url_failed',
+          detail: signedError?.message ?? null,
+          bucket,
+          requestedPath: path,
+          resolvedPath
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    if (!signed.signedUrl) {
+      return new Response(JSON.stringify({ error: 'signed_url_missing' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
