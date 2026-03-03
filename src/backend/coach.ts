@@ -207,11 +207,20 @@ export async function openCoachProgramPdf(
     return { ok: true, url: directSignedUrl };
   }
 
+  const { data: sessionData } = await supabase!.auth.getSession();
+  const accessToken = sessionData.session?.access_token?.trim() ?? '';
+  if (!accessToken) {
+    return { ok: false, error: 'Session expirée. Reconnecte-toi pour ouvrir ton programme.' };
+  }
+
   const invoke = await supabase!.functions.invoke<{
     url?: string;
     error?: string;
   }>('get-coach-program-url', {
-    body: { programId: program.id, expiresIn: expiresInSeconds }
+    body: { programId: program.id, expiresIn: expiresInSeconds },
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
   });
   if (!invoke.error && invoke.data?.url) {
     return { ok: true, url: invoke.data.url };
