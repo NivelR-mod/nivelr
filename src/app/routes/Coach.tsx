@@ -118,7 +118,6 @@ export default function Coach(): JSX.Element {
   const [sessionDraft, setSessionDraft] = useState<CoachSessionFeedbackRow | null>(null);
   const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
   const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
-  const [readyForNextWeek, setReadyForNextWeek] = useState(true);
   const [isEditingSubmittedFeedback, setIsEditingSubmittedFeedback] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
 
@@ -220,7 +219,7 @@ export default function Coach(): JSX.Element {
     const result = await submitCoachFeedback({
       weekNumber: hubData.activeProgram.weekNumber,
       feedbackText: structuredFeedback,
-      readyForNextWeek
+      readyForNextWeek: true
     });
     setSendingFeedback(false);
     if (!result.ok) {
@@ -246,7 +245,6 @@ export default function Coach(): JSX.Element {
     setWeekSummary(parsed.weekSummary);
     setWeekSummaryDraft(null);
     setSessionDraft(null);
-    setReadyForNextWeek(hubData.activeFeedback.readyForNextWeek);
     setFeedbackSuccess('');
     setError('');
     setIsEditingSubmittedFeedback(true);
@@ -576,14 +574,6 @@ export default function Coach(): JSX.Element {
                 </article>
               ) : null}
             </article>
-            <label className="auth-checkbox-row">
-              <input
-                type="checkbox"
-                checked={readyForNextWeek}
-                onChange={(event) => setReadyForNextWeek(event.target.checked)}
-              />
-              Je suis prêt à recevoir la semaine suivante.
-            </label>
             {feedbackSuccess ? <p className="inline-info">{feedbackSuccess}</p> : null}
             <button type="submit" disabled={sendingFeedback || !!sessionDraft || !!weekSummaryDraft}>
               {sendingFeedback ? 'Envoi du retour...' : isEditingSubmittedFeedback ? 'Mettre à jour mon retour' : 'Envoyer mon retour'}
