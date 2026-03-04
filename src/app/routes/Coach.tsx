@@ -129,7 +129,7 @@ export default function Coach(): JSX.Element {
   const [sessionDraft, setSessionDraft] = useState<CoachSessionFeedbackRow | null>(null);
   const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
   const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
-  const [isSessionsSectionOpen, setIsSessionsSectionOpen] = useState(true);
+  const [isSessionsSectionOpen, setIsSessionsSectionOpen] = useState(false);
   const [isWeekSectionOpen, setIsWeekSectionOpen] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
