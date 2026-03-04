@@ -6564,6 +6564,44 @@ textarea::placeholder {
   background: linear-gradient(165deg, rgba(18, 32, 42, 0.8), rgba(10, 19, 27, 0.86));
 }
 
+.coach-week-row {
+  align-items: flex-start;
+}
+
+.coach-week-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.48rem;
+}
+
+.coach-week-btn {
+  min-height: 40px;
+  padding: 0.5rem 0.82rem;
+  border-radius: 11px;
+  border: 1px solid rgba(114, 200, 196, 0.38);
+  background: linear-gradient(145deg, rgba(26, 67, 73, 0.85), rgba(12, 34, 40, 0.9));
+  color: #dcf2f6;
+  font-weight: 800;
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.coach-week-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(114, 200, 196, 0.62);
+  box-shadow: 0 9px 20px rgba(0, 0, 0, 0.18);
+}
+
+.coach-week-btn.is-locked {
+  border-color: rgba(180, 194, 204, 0.25);
+  background: linear-gradient(145deg, rgba(56, 68, 77, 0.66), rgba(36, 46, 54, 0.7));
+  color: #a9bbc3;
+  cursor: not-allowed;
+}
+
 .coach-cta-row p {
   margin: 0;
 }
@@ -6794,6 +6832,15 @@ textarea::placeholder {
   .coach-cta-row .btn-compact {
     width: 100%;
     text-align: center;
+  }
+
+  .coach-week-buttons {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .coach-week-btn {
+    width: 100%;
   }
 
   .coach-intake-grid {

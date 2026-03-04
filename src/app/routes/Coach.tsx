@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getCurrentSessionUser } from '../../backend/localAuth';
 import {
@@ -144,7 +144,12 @@ export default function Coach(): JSX.Element {
     void refreshCoachData();
   }, []);
 
-  const canOpenProgram = Boolean(hubData?.intakeCompleted && hubData?.activeProgram);
+  const latestPublishedWeek = hubData?.publishedPrograms.length
+    ? hubData.publishedPrograms[hubData.publishedPrograms.length - 1].weekNumber
+    : 0;
+  const weekButtonCount = latestPublishedWeek > 0 ? latestPublishedWeek + 1 : 1;
+  const weekButtons = Array.from({ length: weekButtonCount }, (_, index) => index + 1);
+  const programsByWeek = new Map((hubData?.publishedPrograms ?? []).map((program) => [program.weekNumber, program]));
   const feedbackEditDeadline = hubData?.activeFeedback?.submittedAt
     ? getNextSundayEnd(hubData.activeFeedback.submittedAt)
     : null;
@@ -156,16 +161,12 @@ export default function Coach(): JSX.Element {
       hubData.activeProgram &&
       (!hubData.feedbackAlreadySent || (hubData.feedbackAlreadySent && isEditingSubmittedFeedback))
   );
-  const activeWeekLabel = useMemo(() => {
-    if (!hubData?.activeProgram) return null;
-    return `Semaine ${hubData.activeProgram.weekNumber}`;
-  }, [hubData?.activeProgram]);
-
-  const onOpenProgram = async (): Promise<void> => {
-    if (!hubData?.activeProgram) return;
+  const onOpenProgram = async (weekNumber: number): Promise<void> => {
+    const program = programsByWeek.get(weekNumber);
+    if (!program) return;
     setOpeningProgram(true);
     setError('');
-    const result = await openCoachProgramPdf(hubData.activeProgram);
+    const result = await openCoachProgramPdf(program);
     setOpeningProgram(false);
     if (!result.ok || !result.url) {
       setError(result.error ?? 'Programme indisponible pour le moment.');
@@ -357,18 +358,30 @@ export default function Coach(): JSX.Element {
 
         {!loading && hubData?.intakeCompleted ? (
           <>
-            <div className="coach-cta-row">
+            <div className="coach-cta-row coach-week-row">
               <div>
-                <p className="coach-program-label">{activeWeekLabel ?? 'Programme en attente de publication'}</p>
+                <p className="coach-program-label">Mes semaines</p>
                 <p className="coach-program-hint">
-                  {hubData.activeProgram
-                    ? 'Ton programme est disponible en PDF. Ouvre-le et applique la semaine.'
-                    : 'Ton coach prépare ton premier programme. Il apparaîtra ici dès publication.'}
+                  Ouvre une semaine disponible. La prochaine semaine apparaît verrouillée tant qu’elle n’est pas publiée.
                 </p>
               </div>
-              <button type="button" onClick={() => void onOpenProgram()} disabled={!canOpenProgram || openingProgram}>
-                {openingProgram ? 'Ouverture...' : 'Ouvrir mon programme'}
-              </button>
+              <div className="coach-week-buttons">
+                {weekButtons.map((weekNumber) => {
+                  const isLocked = !programsByWeek.get(weekNumber);
+                  return (
+                    <button
+                      key={weekNumber}
+                      type="button"
+                      className={`coach-week-btn${isLocked ? ' is-locked' : ''}`}
+                      disabled={isLocked || openingProgram}
+                      onClick={() => void onOpenProgram(weekNumber)}
+                    >
+                      {openingProgram && !isLocked ? 'Ouverture...' : `Semaine ${weekNumber}`}
+                      {isLocked ? '  🔒' : ''}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="coach-cta-row is-secondary">

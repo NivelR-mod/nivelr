@@ -15,6 +15,7 @@ export interface CoachProgramSummary {
 export interface CoachHubData {
   intakeCompleted: boolean;
   intakeCompletedAt: string | null;
+  publishedPrograms: CoachProgramSummary[];
   activeProgram: CoachProgramSummary | null;
   feedbackAlreadySent: boolean;
   activeFeedback: {
@@ -177,6 +178,7 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
     data: {
       intakeCompleted: Boolean(intakeRes.data),
       intakeCompletedAt: intakeRes.data?.completed_at ?? null,
+      publishedPrograms: programs,
       activeProgram,
       feedbackAlreadySent: activeProgram ? feedbackWeeks.has(activeProgram.weekNumber) : false,
       activeFeedback: activeFeedbackRow
