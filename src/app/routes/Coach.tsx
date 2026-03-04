@@ -744,7 +744,7 @@ export default function Coach(): JSX.Element {
               Enregistrer le brouillon
             </button>
             <button type="submit" disabled={sendingFeedback || !!sessionDraft || !!weekSummaryDraft}>
-              {sendingFeedback ? 'Envoi du retour...' : isEditingSubmittedFeedback ? 'Mettre à jour mon retour' : 'Envoyer mon retour'}
+              {sendingFeedback ? 'Envoi du retour...' : 'Envoyer mon retour'}
             </button>
           </form>
         </article>
@@ -788,11 +788,6 @@ export default function Coach(): JSX.Element {
 
       {!loading && hubData?.feedbackAlreadySent && hubData.activeProgram ? (
         <article className="card premium-section coach-card">
-          <h2>Feedback envoyé</h2>
-          <p>
-            Merci pour ton retour sur la semaine {hubData.activeProgram.weekNumber}. Ton coach peut maintenant publier
-            la suite.
-          </p>
           {canEditSubmittedFeedback && !isEditingSubmittedFeedback ? (
             <>
               <p className="coach-feedback-edit-note">
