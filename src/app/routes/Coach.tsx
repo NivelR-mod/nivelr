@@ -24,6 +24,13 @@ interface CoachWeekSummary {
   notes: string;
 }
 
+interface CoachFeedbackDraftSnapshot {
+  sessions: CoachSessionFeedbackRow[];
+  weekSummary: CoachWeekSummary | null;
+  isEditingSubmittedFeedback: boolean;
+  updatedAt: string;
+}
+
 function createSessionFeedbackDraft(index: number): CoachSessionFeedbackRow {
   return {
     id: `session-${Date.now()}-${index}`,
@@ -106,6 +113,10 @@ function getNextSundayEnd(submittedAt: string): Date | null {
   return deadline;
 }
 
+function getCoachDraftKey(userId: string, weekNumber: number): string {
+  return `nivelr_coach_feedback_draft_v1:${userId}:${weekNumber}`;
+}
+
 export default function Coach(): JSX.Element {
   const session = getCurrentSessionUser();
   const [searchParams] = useSearchParams();
@@ -118,6 +129,7 @@ export default function Coach(): JSX.Element {
   const [sessionDraft, setSessionDraft] = useState<CoachSessionFeedbackRow | null>(null);
   const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
   const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [pendingFeedbackPayload, setPendingFeedbackPayload] = useState<{
     weekNumber: number;
@@ -125,6 +137,7 @@ export default function Coach(): JSX.Element {
   } | null>(null);
   const [isEditingSubmittedFeedback, setIsEditingSubmittedFeedback] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
+  const [draftSavedInfo, setDraftSavedInfo] = useState('');
 
   const intakeJustCompleted = searchParams.get('intake') === 'done';
 
@@ -173,6 +186,35 @@ export default function Coach(): JSX.Element {
       return;
     }
     window.open(result.url, '_blank', 'noopener,noreferrer');
+  };
+
+  const saveDraftToLocal = (): void => {
+    if (!session?.id || !hubData?.activeProgram) return;
+    const key = getCoachDraftKey(session.id, hubData.activeProgram.weekNumber);
+    const payload: CoachFeedbackDraftSnapshot = {
+      sessions: savedSessionFeedbackRows,
+      weekSummary,
+      isEditingSubmittedFeedback,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem(key, JSON.stringify(payload));
+      setDraftSavedInfo('Brouillon enregistré.');
+      setFeedbackSuccess('');
+      setError('');
+    } catch {
+      setError('Impossible d’enregistrer le brouillon sur cet appareil.');
+    }
+  };
+
+  const clearDraftFromLocal = (): void => {
+    if (!session?.id || !hubData?.activeProgram) return;
+    const key = getCoachDraftKey(session.id, hubData.activeProgram.weekNumber);
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // no-op
+    }
   };
 
   const onSubmitFeedback = (event: FormEvent<HTMLFormElement>): void => {
@@ -230,6 +272,7 @@ export default function Coach(): JSX.Element {
     if (!pendingFeedbackPayload) return;
     setError('');
     setFeedbackSuccess('');
+    setDraftSavedInfo('');
     setSendingFeedback(true);
     const result = await submitCoachFeedback({
       weekNumber: pendingFeedbackPayload.weekNumber,
@@ -249,6 +292,7 @@ export default function Coach(): JSX.Element {
     setWeekSummary(null);
     setWeekSummaryDraft(null);
     setIsEditingSubmittedFeedback(false);
+    clearDraftFromLocal();
     setFeedbackSuccess(
       result.warning ?? 'Retour envoyé. Ton coach peut préparer la semaine suivante.'
     );
@@ -262,6 +306,8 @@ export default function Coach(): JSX.Element {
     setWeekSummary(parsed.weekSummary);
     setWeekSummaryDraft(null);
     setSessionDraft(null);
+    setEditingSessionId(null);
+    setDraftSavedInfo('');
     setFeedbackSuccess('');
     setError('');
     setIsEditingSubmittedFeedback(true);
@@ -269,8 +315,20 @@ export default function Coach(): JSX.Element {
 
   const onStartSessionDraft = (): void => {
     setFeedbackSuccess('');
+    setDraftSavedInfo('');
     setError('');
+    setEditingSessionId(null);
     setSessionDraft(createSessionFeedbackDraft(savedSessionFeedbackRows.length));
+  };
+
+  const onEditSavedSession = (id: string): void => {
+    const row = savedSessionFeedbackRows.find((item) => item.id === id);
+    if (!row) return;
+    setFeedbackSuccess('');
+    setDraftSavedInfo('');
+    setError('');
+    setEditingSessionId(id);
+    setSessionDraft({ ...row });
   };
 
   const onValidateSessionDraft = (): void => {
@@ -286,13 +344,24 @@ export default function Coach(): JSX.Element {
       setError('Complète les champs essentiels de la séance avant validation.');
       return;
     }
-    setSavedSessionFeedbackRows((prev) => [...prev, sessionDraft]);
+    if (editingSessionId) {
+      setSavedSessionFeedbackRows((prev) =>
+        prev.map((item) => (item.id === editingSessionId ? { ...sessionDraft, id: editingSessionId } : item))
+      );
+    } else {
+      setSavedSessionFeedbackRows((prev) => [...prev, sessionDraft]);
+    }
     setSessionDraft(null);
+    setEditingSessionId(null);
     setError('');
   };
 
   const onRemoveSavedSession = (id: string): void => {
     setSavedSessionFeedbackRows((prev) => prev.filter((row) => row.id !== id));
+    if (editingSessionId === id) {
+      setSessionDraft(null);
+      setEditingSessionId(null);
+    }
   };
 
   const updateSessionDraft = (
@@ -304,6 +373,7 @@ export default function Coach(): JSX.Element {
 
   const onStartWeekSummaryDraft = (): void => {
     setFeedbackSuccess('');
+    setDraftSavedInfo('');
     setError('');
     setWeekSummaryDraft(
       weekSummary ?? {
@@ -325,6 +395,29 @@ export default function Coach(): JSX.Element {
     setWeekSummaryDraft(null);
     setError('');
   };
+
+  useEffect(() => {
+    if (!session?.id || !hubData?.activeProgram) return;
+    const key = getCoachDraftKey(session.id, hubData.activeProgram.weekNumber);
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as CoachFeedbackDraftSnapshot;
+      if (Array.isArray(parsed.sessions)) {
+        setSavedSessionFeedbackRows(parsed.sessions);
+      }
+      if (parsed.weekSummary && typeof parsed.weekSummary.generalFeeling === 'string') {
+        setWeekSummary({
+          generalFeeling: parsed.weekSummary.generalFeeling,
+          notes: parsed.weekSummary.notes ?? ''
+        });
+      }
+      setIsEditingSubmittedFeedback(Boolean(parsed.isEditingSubmittedFeedback));
+      setDraftSavedInfo('Brouillon récupéré.');
+    } catch {
+      // no-op
+    }
+  }, [session?.id, hubData?.activeProgram?.weekNumber]);
 
   return (
     <section className="page coach-page">
@@ -422,6 +515,13 @@ export default function Coach(): JSX.Element {
                     <article key={row.id} className="coach-feedback-session-card">
                       <div className="coach-feedback-session-head">
                         <h3>Séance validée {index + 1}</h3>
+                        <button
+                          type="button"
+                          className="coach-remove-session-btn"
+                          onClick={() => onEditSavedSession(row.id)}
+                        >
+                          Modifier
+                        </button>
                         <button
                           type="button"
                           className="coach-remove-session-btn"
@@ -534,7 +634,7 @@ export default function Coach(): JSX.Element {
                   </div>
                   <div className="coach-feedback-actions">
                     <button type="button" className="coach-add-session-btn" onClick={onValidateSessionDraft}>
-                      Valider cette séance
+                      {editingSessionId ? 'Valider les modifications' : 'Valider cette séance'}
                     </button>
                   </div>
                 </article>
@@ -604,6 +704,15 @@ export default function Coach(): JSX.Element {
               ) : null}
             </article>
             {feedbackSuccess ? <p className="inline-info">{feedbackSuccess}</p> : null}
+            {draftSavedInfo ? <p className="inline-info">{draftSavedInfo}</p> : null}
+            <button
+              type="button"
+              className="coach-add-session-btn"
+              onClick={saveDraftToLocal}
+              disabled={sendingFeedback}
+            >
+              Enregistrer le brouillon
+            </button>
             <button type="submit" disabled={sendingFeedback || !!sessionDraft || !!weekSummaryDraft}>
               {sendingFeedback ? 'Envoi du retour...' : isEditingSubmittedFeedback ? 'Mettre à jour mon retour' : 'Envoyer mon retour'}
             </button>
