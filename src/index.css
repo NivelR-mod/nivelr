@@ -6588,6 +6588,29 @@ textarea::placeholder {
   gap: 0.75rem;
 }
 
+.coach-feedback-section {
+  border: 1px solid rgba(114, 200, 196, 0.28);
+  border-radius: 12px;
+  padding: 0.72rem;
+  background: linear-gradient(165deg, rgba(10, 21, 30, 0.78), rgba(8, 16, 24, 0.84));
+  display: grid;
+  gap: 0.68rem;
+}
+
+.coach-feedback-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.coach-feedback-section-head h3 {
+  margin: 0;
+  font-size: 0.96rem;
+  color: #dff2f6;
+}
+
 .coach-feedback-session-list {
   display: grid;
   gap: 0.7rem;
@@ -6598,6 +6621,11 @@ textarea::placeholder {
   border-radius: 12px;
   padding: 0.72rem;
   background: linear-gradient(165deg, rgba(11, 23, 32, 0.84), rgba(8, 16, 24, 0.9));
+}
+
+.coach-feedback-session-card.is-draft {
+  border-color: rgba(255, 214, 143, 0.45);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
 
 .coach-feedback-session-head {
@@ -6653,6 +6681,26 @@ textarea::placeholder {
 
 .coach-feedback-field-full {
   grid-column: 1 / -1;
+}
+
+.coach-feedback-empty {
+  margin: 0;
+  color: #b7d6de;
+  font-size: 0.9rem;
+}
+
+.coach-feedback-summary-line {
+  margin: 0;
+  color: #d4edf3;
+  font-size: 0.89rem;
+  line-height: 1.45;
+}
+
+.coach-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
 }
 
 .coach-intake-form h2 {

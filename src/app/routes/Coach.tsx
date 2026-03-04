@@ -19,7 +19,12 @@ interface CoachSessionFeedbackRow {
   sessionNotes: string;
 }
 
-function createSessionFeedbackRow(index: number): CoachSessionFeedbackRow {
+interface CoachWeekSummary {
+  generalFeeling: string;
+  notes: string;
+}
+
+function createSessionFeedbackDraft(index: number): CoachSessionFeedbackRow {
   return {
     id: `session-${Date.now()}-${index}`,
     sessionLabel: `Séance ${index + 1}`,
@@ -40,11 +45,10 @@ export default function Coach(): JSX.Element {
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [error, setError] = useState('');
   const [hubData, setHubData] = useState<CoachHubData | null>(null);
-  const [sessionFeedbackRows, setSessionFeedbackRows] = useState<CoachSessionFeedbackRow[]>([
-    createSessionFeedbackRow(0)
-  ]);
-  const [feedbackGeneralFeeling, setFeedbackGeneralFeeling] = useState('');
-  const [feedbackNotes, setFeedbackNotes] = useState('');
+  const [savedSessionFeedbackRows, setSavedSessionFeedbackRows] = useState<CoachSessionFeedbackRow[]>([]);
+  const [sessionDraft, setSessionDraft] = useState<CoachSessionFeedbackRow | null>(null);
+  const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
+  const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
   const [readyForNextWeek, setReadyForNextWeek] = useState(true);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
 
@@ -92,39 +96,33 @@ export default function Coach(): JSX.Element {
     event.preventDefault();
     if (!hubData?.activeProgram) return;
 
-    const generalFeeling = feedbackGeneralFeeling.trim();
-    const notes = feedbackNotes.trim();
+    if (sessionDraft) {
+      setError('Valide ou annule ton brouillon de séance avant l’envoi final.');
+      return;
+    }
+    if (weekSummaryDraft) {
+      setError('Valide ton retour de semaine avant l’envoi final.');
+      return;
+    }
 
-    if (!sessionFeedbackRows.length) {
+    if (!savedSessionFeedbackRows.length) {
       setError('Ajoute au moins un retour de séance avant envoi.');
       return;
     }
 
-    const incompleteRow = sessionFeedbackRows.find(
-      (row) =>
-        !row.sessionLabel.trim() ||
-        !row.distance.trim() ||
-        !row.duration.trim() ||
-        !row.pace.trim() ||
-        !row.rpe.trim() ||
-        !row.fatigue.trim()
-    );
-    if (incompleteRow) {
-      setError('Merci de compléter tous les champs de chaque retour de séance.');
+    if (!weekSummary?.generalFeeling.trim()) {
+      setError('Ajoute et valide ton retour de semaine avant l’envoi.');
       return;
     }
-
-    if (!generalFeeling) {
-      setError('Renseigne tes sensations générales de la semaine.');
-      return;
-    }
+    const generalFeeling = weekSummary.generalFeeling.trim();
+    const notes = weekSummary.notes.trim();
 
     const structuredFeedback = [
       '=== RETOUR DE SEMAINE ===',
-      ...sessionFeedbackRows.flatMap((row, index) => [
+      ...savedSessionFeedbackRows.flatMap((row, index) => [
         '',
         `--- Séance ${index + 1} ---`,
-        `Séance X: ${row.sessionLabel.trim()}`,
+        `Séance: ${row.sessionLabel.trim()}`,
         `Distances: ${row.distance.trim()}`,
         `Temps: ${row.duration.trim()}`,
         `Rythme (min/km): ${row.pace.trim()}`,
@@ -152,32 +150,71 @@ export default function Coach(): JSX.Element {
       return;
     }
 
-    setSessionFeedbackRows([createSessionFeedbackRow(0)]);
-    setFeedbackGeneralFeeling('');
-    setFeedbackNotes('');
+    setSavedSessionFeedbackRows([]);
+    setSessionDraft(null);
+    setWeekSummary(null);
+    setWeekSummaryDraft(null);
     setFeedbackSuccess('Retour envoyé. Ton coach peut préparer la semaine suivante.');
     await refreshCoachData();
   };
 
-  const addSessionFeedbackRow = (): void => {
-    setSessionFeedbackRows((prev) => [...prev, createSessionFeedbackRow(prev.length)]);
+  const onStartSessionDraft = (): void => {
+    setFeedbackSuccess('');
+    setError('');
+    setSessionDraft(createSessionFeedbackDraft(savedSessionFeedbackRows.length));
   };
 
-  const removeSessionFeedbackRow = (id: string): void => {
-    setSessionFeedbackRows((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((row) => row.id !== id);
-    });
+  const onValidateSessionDraft = (): void => {
+    if (!sessionDraft) return;
+    const isComplete =
+      sessionDraft.sessionLabel.trim() &&
+      sessionDraft.distance.trim() &&
+      sessionDraft.duration.trim() &&
+      sessionDraft.pace.trim() &&
+      sessionDraft.rpe.trim() &&
+      sessionDraft.fatigue.trim();
+    if (!isComplete) {
+      setError('Complète les champs essentiels de la séance avant validation.');
+      return;
+    }
+    setSavedSessionFeedbackRows((prev) => [...prev, sessionDraft]);
+    setSessionDraft(null);
+    setError('');
   };
 
-  const updateSessionFeedbackRow = (
-    id: string,
+  const onRemoveSavedSession = (id: string): void => {
+    setSavedSessionFeedbackRows((prev) => prev.filter((row) => row.id !== id));
+  };
+
+  const updateSessionDraft = (
     key: keyof Omit<CoachSessionFeedbackRow, 'id'>,
     value: string
   ): void => {
-    setSessionFeedbackRows((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [key]: value } : row))
+    setSessionDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const onStartWeekSummaryDraft = (): void => {
+    setFeedbackSuccess('');
+    setError('');
+    setWeekSummaryDraft(
+      weekSummary ?? {
+        generalFeeling: '',
+        notes: ''
+      }
     );
+  };
+
+  const onValidateWeekSummaryDraft = (): void => {
+    if (!weekSummaryDraft?.generalFeeling.trim()) {
+      setError('Renseigne au minimum les sensations générales.');
+      return;
+    }
+    setWeekSummary({
+      generalFeeling: weekSummaryDraft.generalFeeling.trim(),
+      notes: weekSummaryDraft.notes.trim()
+    });
+    setWeekSummaryDraft(null);
+    setError('');
   };
 
   return (
@@ -248,66 +285,94 @@ export default function Coach(): JSX.Element {
             Pour recevoir la semaine suivante, complète ce retour guidé sur ta semaine en cours.
           </p>
           <form className="form coach-feedback-form" onSubmit={(event) => void onSubmitFeedback(event)}>
-            <div className="coach-feedback-session-list">
-              {sessionFeedbackRows.map((row, index) => (
-                <article key={row.id} className="coach-feedback-session-card">
+            <article className="coach-feedback-section">
+              <div className="coach-feedback-section-head">
+                <h3>Retours de séance</h3>
+                {!sessionDraft ? (
+                  <button type="button" className="coach-add-session-btn" onClick={onStartSessionDraft}>
+                    + Ajouter une séance
+                  </button>
+                ) : null}
+              </div>
+
+              {savedSessionFeedbackRows.length ? (
+                <div className="coach-feedback-session-list">
+                  {savedSessionFeedbackRows.map((row, index) => (
+                    <article key={row.id} className="coach-feedback-session-card">
+                      <div className="coach-feedback-session-head">
+                        <h3>Séance validée {index + 1}</h3>
+                        <button
+                          type="button"
+                          className="coach-remove-session-btn"
+                          onClick={() => onRemoveSavedSession(row.id)}
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                      <p className="coach-feedback-summary-line">
+                        <strong>{row.sessionLabel}</strong> · {row.distance} · {row.duration} · {row.pace} · RPE{' '}
+                        {row.rpe} · Fatigue {row.fatigue}/5
+                      </p>
+                      {row.sessionNotes ? (
+                        <p className="coach-feedback-summary-line">Note: {row.sessionNotes}</p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="coach-feedback-empty">Aucune séance validée pour le moment.</p>
+              )}
+
+              {sessionDraft ? (
+                <article className="coach-feedback-session-card is-draft">
                   <div className="coach-feedback-session-head">
-                    <h3>Retour séance {index + 1}</h3>
-                    {sessionFeedbackRows.length > 1 ? (
-                      <button
-                        type="button"
-                        className="coach-remove-session-btn"
-                        onClick={() => removeSessionFeedbackRow(row.id)}
-                      >
-                        Supprimer
-                      </button>
-                    ) : null}
+                    <h3>Brouillon de séance</h3>
+                    <button
+                      type="button"
+                      className="coach-remove-session-btn"
+                      onClick={() => setSessionDraft(null)}
+                    >
+                      Annuler
+                    </button>
                   </div>
                   <div className="coach-feedback-grid">
                     <label>
                       Séance
                       <input
-                        value={row.sessionLabel}
-                        onChange={(event) =>
-                          updateSessionFeedbackRow(row.id, 'sessionLabel', event.target.value)
-                        }
+                        value={sessionDraft.sessionLabel}
+                        onChange={(event) => updateSessionDraft('sessionLabel', event.target.value)}
                         placeholder="Ex: Fractionné 8x400"
-                        required
                       />
                     </label>
                     <label>
                       Distances
                       <input
-                        value={row.distance}
-                        onChange={(event) => updateSessionFeedbackRow(row.id, 'distance', event.target.value)}
+                        value={sessionDraft.distance}
+                        onChange={(event) => updateSessionDraft('distance', event.target.value)}
                         placeholder="Ex: 7.2 km"
-                        required
                       />
                     </label>
                     <label>
                       Temps
                       <input
-                        value={row.duration}
-                        onChange={(event) => updateSessionFeedbackRow(row.id, 'duration', event.target.value)}
+                        value={sessionDraft.duration}
+                        onChange={(event) => updateSessionDraft('duration', event.target.value)}
                         placeholder="Ex: 45 min"
-                        required
                       />
                     </label>
                     <label>
                       Rythme (min/km)
                       <input
-                        value={row.pace}
-                        onChange={(event) => updateSessionFeedbackRow(row.id, 'pace', event.target.value)}
+                        value={sessionDraft.pace}
+                        onChange={(event) => updateSessionDraft('pace', event.target.value)}
                         placeholder="Ex: 5:58"
-                        required
                       />
                     </label>
                     <label>
                       RPE moyen
                       <select
-                        value={row.rpe}
-                        onChange={(event) => updateSessionFeedbackRow(row.id, 'rpe', event.target.value)}
-                        required
+                        value={sessionDraft.rpe}
+                        onChange={(event) => updateSessionDraft('rpe', event.target.value)}
                       >
                         <option value="">Choisir</option>
                         <option value="1">1 - Très facile</option>
@@ -325,9 +390,8 @@ export default function Coach(): JSX.Element {
                     <label>
                       Fatigue (1-5)
                       <select
-                        value={row.fatigue}
-                        onChange={(event) => updateSessionFeedbackRow(row.id, 'fatigue', event.target.value)}
-                        required
+                        value={sessionDraft.fatigue}
+                        onChange={(event) => updateSessionDraft('fatigue', event.target.value)}
                       >
                         <option value="">Choisir</option>
                         <option value="1">1 - Très faible</option>
@@ -340,43 +404,84 @@ export default function Coach(): JSX.Element {
                     <label className="coach-feedback-field-full">
                       Note libre séance
                       <textarea
-                        value={row.sessionNotes}
-                        onChange={(event) =>
-                          updateSessionFeedbackRow(row.id, 'sessionNotes', event.target.value)
-                        }
+                        value={sessionDraft.sessionNotes}
+                        onChange={(event) => updateSessionDraft('sessionNotes', event.target.value)}
                         className="contact-message"
                         placeholder="Ex: bonnes sensations sur la fin, difficile sur la relance..."
                       />
                     </label>
                   </div>
+                  <div className="coach-feedback-actions">
+                    <button type="button" className="coach-add-session-btn" onClick={onValidateSessionDraft}>
+                      Valider cette séance
+                    </button>
+                  </div>
                 </article>
-              ))}
-            </div>
-            <button type="button" className="coach-add-session-btn" onClick={addSessionFeedbackRow}>
-              + Ajouter un retour de séance
-            </button>
+              ) : null}
+            </article>
 
-            <div className="coach-feedback-grid">
-              <label className="coach-feedback-field-full">
-                Sensations générales
-                <textarea
-                  value={feedbackGeneralFeeling}
-                  onChange={(event) => setFeedbackGeneralFeeling(event.target.value)}
-                  className="contact-message"
-                  placeholder="Ex: semaine plutôt maîtrisée, bon ressenti global"
-                  required
-                />
-              </label>
-              <label className="coach-feedback-field-full">
-                Notes libres sur la semaine
-                <textarea
-                  value={feedbackNotes}
-                  onChange={(event) => setFeedbackNotes(event.target.value)}
-                  className="contact-message"
-                  placeholder="Ex: contraintes pro, météo, matériel, envie..."
-                />
-              </label>
-            </div>
+            <article className="coach-feedback-section">
+              <div className="coach-feedback-section-head">
+                <h3>Retour de semaine</h3>
+                {!weekSummaryDraft ? (
+                  <button type="button" className="coach-add-session-btn" onClick={onStartWeekSummaryDraft}>
+                    {weekSummary ? 'Modifier le retour de semaine' : 'Ajouter un retour de semaine'}
+                  </button>
+                ) : null}
+              </div>
+
+              {weekSummary ? (
+                <article className="coach-feedback-session-card">
+                  <p className="coach-feedback-summary-line">
+                    <strong>Sensations générales:</strong> {weekSummary.generalFeeling}
+                  </p>
+                  <p className="coach-feedback-summary-line">
+                    <strong>Notes libres:</strong> {weekSummary.notes || 'Aucune note libre'}
+                  </p>
+                </article>
+              ) : (
+                <p className="coach-feedback-empty">Aucun retour de semaine validé pour le moment.</p>
+              )}
+
+              {weekSummaryDraft ? (
+                <article className="coach-feedback-session-card is-draft">
+                  <div className="coach-feedback-grid">
+                    <label className="coach-feedback-field-full">
+                      Sensations générales
+                      <textarea
+                        value={weekSummaryDraft.generalFeeling}
+                        onChange={(event) =>
+                          setWeekSummaryDraft((prev) =>
+                            prev ? { ...prev, generalFeeling: event.target.value } : prev
+                          )
+                        }
+                        className="contact-message"
+                        placeholder="Ex: semaine plutôt maîtrisée, bon ressenti global"
+                      />
+                    </label>
+                    <label className="coach-feedback-field-full">
+                      Notes libres sur la semaine
+                      <textarea
+                        value={weekSummaryDraft.notes}
+                        onChange={(event) =>
+                          setWeekSummaryDraft((prev) => (prev ? { ...prev, notes: event.target.value } : prev))
+                        }
+                        className="contact-message"
+                        placeholder="Ex: contraintes pro, météo, matériel, envie..."
+                      />
+                    </label>
+                  </div>
+                  <div className="coach-feedback-actions">
+                    <button type="button" className="coach-add-session-btn" onClick={onValidateWeekSummaryDraft}>
+                      Valider le retour de semaine
+                    </button>
+                    <button type="button" className="coach-remove-session-btn" onClick={() => setWeekSummaryDraft(null)}>
+                      Annuler
+                    </button>
+                  </div>
+                </article>
+              ) : null}
+            </article>
             <label className="auth-checkbox-row">
               <input
                 type="checkbox"
@@ -386,7 +491,7 @@ export default function Coach(): JSX.Element {
               Je suis prêt à recevoir la semaine suivante.
             </label>
             {feedbackSuccess ? <p className="inline-info">{feedbackSuccess}</p> : null}
-            <button type="submit" disabled={sendingFeedback}>
+            <button type="submit" disabled={sendingFeedback || !!sessionDraft || !!weekSummaryDraft}>
               {sendingFeedback ? 'Envoi du retour...' : 'Envoyer mon retour'}
             </button>
           </form>
