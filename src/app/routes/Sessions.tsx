@@ -211,6 +211,7 @@ export default function Sessions({
           <SessionCard
             key={session.id}
             session={session}
+            collapsible
             onEdit={(selected) => setEditingSession(selected)}
             onDuplicate={onDuplicateSession}
             onDelete={(selected) => {

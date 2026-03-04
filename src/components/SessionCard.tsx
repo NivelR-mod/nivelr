@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Session } from '../types/models';
 
 interface SessionCardProps {
@@ -6,6 +7,7 @@ interface SessionCardProps {
   onDuplicate?: (session: Session) => void;
   onDelete?: (session: Session) => void;
   onSelect?: (session: Session) => void;
+  collapsible?: boolean;
 }
 
 export default function SessionCard({
@@ -13,9 +15,70 @@ export default function SessionCard({
   onEdit,
   onDuplicate,
   onDelete,
-  onSelect
+  onSelect,
+  collapsible = false
 }: SessionCardProps): JSX.Element {
   const date = new Date(session.createdAt).toLocaleString('fr-FR');
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (collapsible) {
+    return (
+      <article className={`card session-card session-card-collapsible ${isOpen ? 'is-open' : ''}`}>
+        <button
+          type="button"
+          className="session-summary"
+          onClick={() => setIsOpen((prev) => !prev)}
+          aria-expanded={isOpen}
+        >
+          <div className="session-summary-main">
+            <strong>{session.subtype}</strong>
+            <span>{session.sportType}</span>
+          </div>
+          <div className="session-summary-metrics">
+            <span>
+              {session.durationMin} min
+              {typeof session.distanceKm === 'number' ? ` • ${session.distanceKm} km` : ''}
+            </span>
+            <strong>+{session.xp} XP</strong>
+            <span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+          </div>
+        </button>
+
+        {isOpen ? (
+          <div className="session-details">
+            <p className="session-meta">
+              État de forme {session.feelings.feltState}/5 • RPE {session.feelings.rpe}/10 • Fatigue{' '}
+              {session.feelings.fatigue}/5
+            </p>
+            {session.comment ? <p className="session-comment">{session.comment}</p> : null}
+            <div className="session-footer">
+              <span>{date}</span>
+            </div>
+            {onEdit || onDelete ? (
+              <div className="session-actions">
+                {onEdit ? (
+                  <button type="button" onClick={() => onEdit(session)}>
+                    Modifier
+                  </button>
+                ) : null}
+                {onDuplicate ? (
+                  <button type="button" onClick={() => onDuplicate(session)}>
+                    Dupliquer
+                  </button>
+                ) : null}
+                {onDelete ? (
+                  <button type="button" className="danger" onClick={() => onDelete(session)}>
+                    Supprimer
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+
   return (
     <article
       className={`card session-card ${onSelect ? 'is-clickable' : ''}`}

@@ -1376,6 +1376,63 @@ textarea:focus {
   box-shadow: 0 18px 30px rgba(11, 17, 28, 0.12);
 }
 
+.session-card-collapsible {
+  padding: 0.52rem 0.58rem;
+}
+
+.session-card-collapsible:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.session-summary {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.1rem 0;
+  color: inherit;
+}
+
+.session-summary-main {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.session-summary-main strong {
+  font-size: 0.93rem;
+  color: #173447;
+}
+
+.session-summary-main span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.session-summary-metrics {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.52rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.session-summary-metrics strong {
+  color: #173447;
+  font-size: 0.83rem;
+}
+
+.session-details {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed #d9e6ef;
+}
+
 .session-top {
   display: flex;
   justify-content: space-between;
