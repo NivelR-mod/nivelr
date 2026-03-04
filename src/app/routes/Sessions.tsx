@@ -1,4 +1,4 @@
-import { CSSProperties, useMemo, useState } from 'react';
+import { CSSProperties, useEffect, useMemo, useState } from 'react';
 import SessionEditorModal from '../../components/SessionEditorModal';
 import SessionCard from '../../components/SessionCard';
 import { AppState, Session } from '../../types/models';
@@ -19,6 +19,7 @@ export default function Sessions({
   onDuplicateSession,
   onExportFiltered
 }: SessionsProps): JSX.Element {
+  const PAGE_SIZE = 10;
   const [search, setSearch] = useState<string>('');
   const [sportFilter, setSportFilter] = useState<'ALL' | 'RUNNING' | 'OTHER'>('ALL');
   const [subtypeFilter, setSubtypeFilter] = useState<string>('ALL');
@@ -28,6 +29,7 @@ export default function Sessions({
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   const subtypeOptions = useMemo(() => {
     const unique = new Set(state.sessions.map((session) => session.subtype));
@@ -74,6 +76,18 @@ export default function Sessions({
 
   const filteredXp = filtered.reduce((sum, session) => sum + session.xp, 0);
   const filteredMinutes = filtered.reduce((sum, session) => sum + session.durationMin, 0);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginatedSessions = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, sportFilter, subtypeFilter, periodFilter, sortBy, minDuration]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <section className="page page-sessions">
@@ -207,7 +221,7 @@ export default function Sessions({
       ) : null}
 
       <div className="list">
-        {filtered.map((session) => (
+        {paginatedSessions.map((session) => (
           <SessionCard
             key={session.id}
             session={session}
@@ -221,6 +235,36 @@ export default function Sessions({
           />
         ))}
       </div>
+      {filtered.length > PAGE_SIZE ? (
+        <div className="sessions-pagination">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            Précédent
+          </button>
+          <div className="sessions-pagination-pages">
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <button
+                key={page}
+                type="button"
+                className={page === currentPage ? 'is-active' : ''}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Suivant
+          </button>
+        </div>
+      ) : null}
       {state.sessions.length > 0 && filtered.length === 0 ? (
         <article className="card empty-state">Aucune séance ne correspond à ces filtres.</article>
       ) : null}
