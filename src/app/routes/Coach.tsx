@@ -118,6 +118,11 @@ export default function Coach(): JSX.Element {
   const [sessionDraft, setSessionDraft] = useState<CoachSessionFeedbackRow | null>(null);
   const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
   const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  const [pendingFeedbackPayload, setPendingFeedbackPayload] = useState<{
+    weekNumber: number;
+    feedbackText: string;
+  } | null>(null);
   const [isEditingSubmittedFeedback, setIsEditingSubmittedFeedback] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
 
@@ -169,7 +174,7 @@ export default function Coach(): JSX.Element {
     window.open(result.url, '_blank', 'noopener,noreferrer');
   };
 
-  const onSubmitFeedback = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const onSubmitFeedback = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (!hubData?.activeProgram) return;
 
@@ -213,12 +218,21 @@ export default function Coach(): JSX.Element {
       `Notes libres sur la semaine: ${notes || 'Aucune note libre'}`
     ].join('\n');
 
+    setPendingFeedbackPayload({
+      weekNumber: hubData.activeProgram.weekNumber,
+      feedbackText: structuredFeedback
+    });
+    setConfirmSubmitOpen(true);
+  };
+
+  const onConfirmSubmitFeedback = async (): Promise<void> => {
+    if (!pendingFeedbackPayload) return;
     setError('');
     setFeedbackSuccess('');
     setSendingFeedback(true);
     const result = await submitCoachFeedback({
-      weekNumber: hubData.activeProgram.weekNumber,
-      feedbackText: structuredFeedback,
+      weekNumber: pendingFeedbackPayload.weekNumber,
+      feedbackText: pendingFeedbackPayload.feedbackText,
       readyForNextWeek: true
     });
     setSendingFeedback(false);
@@ -227,6 +241,8 @@ export default function Coach(): JSX.Element {
       return;
     }
 
+    setConfirmSubmitOpen(false);
+    setPendingFeedbackPayload(null);
     setSavedSessionFeedbackRows([]);
     setSessionDraft(null);
     setWeekSummary(null);
@@ -580,6 +596,42 @@ export default function Coach(): JSX.Element {
             </button>
           </form>
         </article>
+      ) : null}
+
+      {confirmSubmitOpen ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (sendingFeedback) return;
+            setConfirmSubmitOpen(false);
+            setPendingFeedbackPayload(null);
+          }}
+        >
+          <article className="card session-modal style-confirm-modal coach-confirm-modal" onClick={(event) => event.stopPropagation()}>
+            <h2>Confirmer l’envoi au coach ?</h2>
+            <p>
+              Ton retour de semaine va être transmis au coach. Tu pourras encore le modifier jusqu’au dimanche suivant
+              23:59, mais cette étape évite les envois involontaires.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmSubmitOpen(false);
+                  setPendingFeedbackPayload(null);
+                }}
+                disabled={sendingFeedback}
+              >
+                Annuler
+              </button>
+              <button type="button" onClick={() => void onConfirmSubmitFeedback()} disabled={sendingFeedback}>
+                {sendingFeedback ? 'Envoi...' : 'Confirmer l’envoi'}
+              </button>
+            </div>
+          </article>
+        </div>
       ) : null}
 
       {!loading && hubData?.feedbackAlreadySent && hubData.activeProgram ? (
