@@ -1,4 +1,5 @@
 import { getCurrentSessionUser, isRemoteAuthEnabledLocal } from './localAuth';
+import { sendContactEmail } from './contactEmail';
 import { supabase } from './supabaseClient';
 
 export interface CoachProgramSummary {
@@ -308,6 +309,15 @@ export async function submitCoachFeedback(input: {
   });
 
   if (notifyResult.error || !notifyResult.data?.ok) {
+    const fallback = await sendContactEmail({
+      replyEmail: user.email,
+      senderName: `${user.displayName} (@${user.handle})`,
+      subject: coachMailSubject,
+      message: coachMailMessage
+    });
+    if (fallback.ok) {
+      return { ok: true };
+    }
     return {
       ok: true,
       warning:
