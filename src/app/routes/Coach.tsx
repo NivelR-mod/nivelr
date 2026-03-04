@@ -786,7 +786,7 @@ export default function Coach(): JSX.Element {
         </div>
       ) : null}
 
-      {!loading && hubData?.feedbackAlreadySent && hubData.activeProgram ? (
+      {!loading && hubData?.feedbackAlreadySent && hubData.activeProgram && !isEditingSubmittedFeedback ? (
         <article className="card premium-section coach-card">
           {canEditSubmittedFeedback && !isEditingSubmittedFeedback ? (
             <>
