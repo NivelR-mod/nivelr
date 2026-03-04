@@ -37,6 +37,75 @@ function createSessionFeedbackDraft(index: number): CoachSessionFeedbackRow {
   };
 }
 
+function parseFeedbackText(feedbackText: string): {
+  sessions: CoachSessionFeedbackRow[];
+  weekSummary: CoachWeekSummary | null;
+} {
+  const lines = feedbackText.split('\n').map((line) => line.trim());
+  const sessions: CoachSessionFeedbackRow[] = [];
+  let currentSession: CoachSessionFeedbackRow | null = null;
+
+  const flushCurrentSession = (): void => {
+    if (!currentSession) return;
+    sessions.push(currentSession);
+    currentSession = null;
+  };
+
+  lines.forEach((line) => {
+    if (!line) return;
+    if (line.startsWith('--- Séance')) {
+      flushCurrentSession();
+      currentSession = {
+        id: `session-${Date.now()}-${sessions.length + 1}`,
+        sessionLabel: '',
+        distance: '',
+        duration: '',
+        pace: '',
+        rpe: '',
+        fatigue: '',
+        sessionNotes: ''
+      };
+      return;
+    }
+
+    if (!currentSession) return;
+    if (line.startsWith('Séance:')) currentSession.sessionLabel = line.replace('Séance:', '').trim();
+    if (line.startsWith('Distances:')) currentSession.distance = line.replace('Distances:', '').trim();
+    if (line.startsWith('Temps:')) currentSession.duration = line.replace('Temps:', '').trim();
+    if (line.startsWith('Rythme (min/km):')) currentSession.pace = line.replace('Rythme (min/km):', '').trim();
+    if (line.startsWith('RPE moyen:')) currentSession.rpe = line.replace('RPE moyen:', '').trim();
+    if (line.startsWith('Fatigue (1-5):')) currentSession.fatigue = line.replace('Fatigue (1-5):', '').trim();
+    if (line.startsWith('Note libre séance:')) {
+      const notes = line.replace('Note libre séance:', '').trim();
+      currentSession.sessionNotes = notes === 'Aucune note' ? '' : notes;
+    }
+  });
+
+  flushCurrentSession();
+
+  const generalLine = lines.find((line) => line.startsWith('Sensations générales:'));
+  const notesLine = lines.find((line) => line.startsWith('Notes libres sur la semaine:'));
+  const weekSummary = generalLine
+    ? {
+        generalFeeling: generalLine.replace('Sensations générales:', '').trim(),
+        notes: (notesLine?.replace('Notes libres sur la semaine:', '').trim() ?? '').replace(/^Aucune note libre$/, '')
+      }
+    : null;
+
+  return { sessions, weekSummary };
+}
+
+function getNextSundayEnd(submittedAt: string): Date | null {
+  const submitted = new Date(submittedAt);
+  if (Number.isNaN(submitted.getTime())) return null;
+  const deadline = new Date(submitted);
+  const day = deadline.getDay();
+  const daysUntilNextSunday = day === 0 ? 7 : 7 - day;
+  deadline.setDate(deadline.getDate() + daysUntilNextSunday);
+  deadline.setHours(23, 59, 59, 999);
+  return deadline;
+}
+
 export default function Coach(): JSX.Element {
   const session = getCurrentSessionUser();
   const [searchParams] = useSearchParams();
@@ -50,6 +119,7 @@ export default function Coach(): JSX.Element {
   const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
   const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
   const [readyForNextWeek, setReadyForNextWeek] = useState(true);
+  const [isEditingSubmittedFeedback, setIsEditingSubmittedFeedback] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState('');
 
   const intakeJustCompleted = searchParams.get('intake') === 'done';
@@ -71,8 +141,16 @@ export default function Coach(): JSX.Element {
   }, []);
 
   const canOpenProgram = Boolean(hubData?.intakeCompleted && hubData?.activeProgram);
+  const feedbackEditDeadline = hubData?.activeFeedback?.submittedAt
+    ? getNextSundayEnd(hubData.activeFeedback.submittedAt)
+    : null;
+  const canEditSubmittedFeedback = Boolean(
+    hubData?.feedbackAlreadySent && feedbackEditDeadline && new Date().getTime() <= feedbackEditDeadline.getTime()
+  );
   const shouldShowFeedbackForm = Boolean(
-    hubData?.intakeCompleted && hubData.activeProgram && !hubData.feedbackAlreadySent
+    hubData?.intakeCompleted &&
+      hubData.activeProgram &&
+      (!hubData.feedbackAlreadySent || (hubData.feedbackAlreadySent && isEditingSubmittedFeedback))
   );
   const activeWeekLabel = useMemo(() => {
     if (!hubData?.activeProgram) return null;
@@ -154,8 +232,22 @@ export default function Coach(): JSX.Element {
     setSessionDraft(null);
     setWeekSummary(null);
     setWeekSummaryDraft(null);
+    setIsEditingSubmittedFeedback(false);
     setFeedbackSuccess('Retour envoyé. Ton coach peut préparer la semaine suivante.');
     await refreshCoachData();
+  };
+
+  const onStartEditSubmittedFeedback = (): void => {
+    if (!hubData?.activeFeedback) return;
+    const parsed = parseFeedbackText(hubData.activeFeedback.feedbackText);
+    setSavedSessionFeedbackRows(parsed.sessions);
+    setWeekSummary(parsed.weekSummary);
+    setWeekSummaryDraft(null);
+    setSessionDraft(null);
+    setReadyForNextWeek(hubData.activeFeedback.readyForNextWeek);
+    setFeedbackSuccess('');
+    setError('');
+    setIsEditingSubmittedFeedback(true);
   };
 
   const onStartSessionDraft = (): void => {
@@ -492,7 +584,7 @@ export default function Coach(): JSX.Element {
             </label>
             {feedbackSuccess ? <p className="inline-info">{feedbackSuccess}</p> : null}
             <button type="submit" disabled={sendingFeedback || !!sessionDraft || !!weekSummaryDraft}>
-              {sendingFeedback ? 'Envoi du retour...' : 'Envoyer mon retour'}
+              {sendingFeedback ? 'Envoi du retour...' : isEditingSubmittedFeedback ? 'Mettre à jour mon retour' : 'Envoyer mon retour'}
             </button>
           </form>
         </article>
@@ -505,6 +597,27 @@ export default function Coach(): JSX.Element {
             Merci pour ton retour sur la semaine {hubData.activeProgram.weekNumber}. Ton coach peut maintenant publier
             la suite.
           </p>
+          {canEditSubmittedFeedback && !isEditingSubmittedFeedback ? (
+            <>
+              <p className="coach-feedback-edit-note">
+                Tu peux encore modifier ce retour jusqu’au{' '}
+                {feedbackEditDeadline?.toLocaleDateString('fr-FR', {
+                  weekday: 'long',
+                  day: '2-digit',
+                  month: 'long'
+                })}{' '}
+                à 23:59.
+              </p>
+              <button type="button" className="coach-action-btn" onClick={onStartEditSubmittedFeedback}>
+                Modifier mon retour
+              </button>
+            </>
+          ) : null}
+          {!canEditSubmittedFeedback ? (
+            <p className="coach-feedback-edit-note">
+              La fenêtre de modification est fermée pour cette semaine.
+            </p>
+          ) : null}
         </article>
       ) : null}
     </section>

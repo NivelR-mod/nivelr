@@ -16,6 +16,12 @@ export interface CoachHubData {
   intakeCompletedAt: string | null;
   activeProgram: CoachProgramSummary | null;
   feedbackAlreadySent: boolean;
+  activeFeedback: {
+    weekNumber: number;
+    feedbackText: string;
+    readyForNextWeek: boolean;
+    submittedAt: string;
+  } | null;
 }
 
 type CoachProgramRow = {
@@ -30,6 +36,9 @@ type CoachProgramRow = {
 
 type CoachFeedbackRow = {
   week_number: number;
+  feedback_text: string;
+  ready_for_next_week: boolean;
+  submitted_at: string;
 };
 
 const DEFAULT_STORAGE_BUCKET = (import.meta.env.VITE_COACH_STORAGE_BUCKET ?? 'coach-programs').trim();
@@ -144,7 +153,7 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
     .order('week_number', { ascending: true });
   const feedbackPromise = supabase!
     .from('coach_feedbacks')
-    .select('week_number')
+    .select('week_number, feedback_text, ready_for_next_week, submitted_at')
     .eq('user_id', userId);
 
   const [intakeRes, programsRes, feedbackRes] = await Promise.all([intakePromise, programsPromise, feedbackPromise]);
@@ -153,10 +162,14 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
   if (feedbackRes.error) return { ok: false, error: feedbackRes.error.message };
 
   const programs = ((programsRes.data ?? []) as CoachProgramRow[]).map(mapProgramRow);
-  const feedbackWeeks = new Set(((feedbackRes.data ?? []) as CoachFeedbackRow[]).map((row) => row.week_number));
+  const feedbackRows = (feedbackRes.data ?? []) as CoachFeedbackRow[];
+  const feedbackWeeks = new Set(feedbackRows.map((row) => row.week_number));
   const firstPendingProgram = programs.find((program) => !feedbackWeeks.has(program.weekNumber));
   const latestProgram = programs.length ? programs[programs.length - 1] : null;
   const activeProgram = firstPendingProgram ?? latestProgram ?? null;
+  const activeFeedbackRow = activeProgram
+    ? feedbackRows.find((row) => row.week_number === activeProgram.weekNumber) ?? null
+    : null;
 
   return {
     ok: true,
@@ -164,7 +177,15 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
       intakeCompleted: Boolean(intakeRes.data),
       intakeCompletedAt: intakeRes.data?.completed_at ?? null,
       activeProgram,
-      feedbackAlreadySent: activeProgram ? feedbackWeeks.has(activeProgram.weekNumber) : false
+      feedbackAlreadySent: activeProgram ? feedbackWeeks.has(activeProgram.weekNumber) : false,
+      activeFeedback: activeFeedbackRow
+        ? {
+            weekNumber: activeFeedbackRow.week_number,
+            feedbackText: activeFeedbackRow.feedback_text,
+            readyForNextWeek: activeFeedbackRow.ready_for_next_week,
+            submittedAt: activeFeedbackRow.submitted_at
+          }
+        : null
     }
   };
 }

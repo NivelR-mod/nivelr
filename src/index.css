@@ -6528,6 +6528,12 @@ textarea::placeholder {
   opacity: 0.92;
 }
 
+.coach-feedback-edit-note {
+  margin: 0.4rem 0 0.65rem;
+  color: #b9d7df;
+  font-size: 0.88rem;
+}
+
 .coach-cta-row {
   display: flex;
   align-items: center;
