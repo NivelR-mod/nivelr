@@ -458,13 +458,8 @@ export default function Coach(): JSX.Element {
 
         {!loading && hubData?.intakeCompleted ? (
           <>
-            <div className="coach-cta-row coach-week-row">
-              <div>
-                <p className="coach-program-label">Mes semaines</p>
-                <p className="coach-program-hint">
-                  Ouvre une semaine disponible. La prochaine semaine apparaît verrouillée tant qu’elle n’est pas publiée.
-                </p>
-              </div>
+            <div className="coach-week-strip">
+              <p className="coach-program-label">Programmes</p>
               <div className="coach-week-buttons">
                 {weekButtons.map((weekNumber) => {
                   const isLocked = !programsByWeek.get(weekNumber);
@@ -506,7 +501,7 @@ export default function Coach(): JSX.Element {
             Pour recevoir la semaine suivante, complète ce retour guidé sur ta semaine en cours.
           </p>
           <form className="form coach-feedback-form" onSubmit={(event) => void onSubmitFeedback(event)}>
-            <article className="coach-feedback-section">
+            <article className={`coach-feedback-section${isSessionsSectionOpen ? ' is-open' : ''}`}>
               <div className="coach-feedback-section-head">
                 <button
                   type="button"
@@ -664,7 +659,7 @@ export default function Coach(): JSX.Element {
               ) : null}
             </article>
 
-            <article className="coach-feedback-section">
+            <article className={`coach-feedback-section${isWeekSectionOpen ? ' is-open' : ''}`}>
               <div className="coach-feedback-section-head">
                 <button
                   type="button"
