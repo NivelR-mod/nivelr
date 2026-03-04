@@ -6669,6 +6669,19 @@ textarea::placeholder {
   color: #dff2f6;
 }
 
+.coach-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(114, 200, 196, 0.36);
+  border-radius: 10px;
+  background: rgba(8, 18, 24, 0.72);
+  color: #dff2f6;
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.65rem;
+}
+
 .coach-feedback-session-list {
   display: grid;
   gap: 0.7rem;
@@ -6698,6 +6711,12 @@ textarea::placeholder {
   margin: 0;
   font-size: 0.92rem;
   color: #d9eef3;
+}
+
+.coach-feedback-session-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
 }
 
 .coach-add-session-btn,

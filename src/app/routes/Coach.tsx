@@ -129,6 +129,8 @@ export default function Coach(): JSX.Element {
   const [sessionDraft, setSessionDraft] = useState<CoachSessionFeedbackRow | null>(null);
   const [weekSummary, setWeekSummary] = useState<CoachWeekSummary | null>(null);
   const [weekSummaryDraft, setWeekSummaryDraft] = useState<CoachWeekSummary | null>(null);
+  const [isSessionsSectionOpen, setIsSessionsSectionOpen] = useState(true);
+  const [isWeekSectionOpen, setIsWeekSectionOpen] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [pendingFeedbackPayload, setPendingFeedbackPayload] = useState<{
@@ -311,6 +313,8 @@ export default function Coach(): JSX.Element {
     setFeedbackSuccess('');
     setError('');
     setIsEditingSubmittedFeedback(true);
+    setIsSessionsSectionOpen(true);
+    setIsWeekSectionOpen(true);
   };
 
   const onStartSessionDraft = (): void => {
@@ -319,6 +323,7 @@ export default function Coach(): JSX.Element {
     setError('');
     setEditingSessionId(null);
     setSessionDraft(createSessionFeedbackDraft(savedSessionFeedbackRows.length));
+    setIsSessionsSectionOpen(true);
   };
 
   const onEditSavedSession = (id: string): void => {
@@ -329,6 +334,7 @@ export default function Coach(): JSX.Element {
     setError('');
     setEditingSessionId(id);
     setSessionDraft({ ...row });
+    setIsSessionsSectionOpen(true);
   };
 
   const onValidateSessionDraft = (): void => {
@@ -381,6 +387,7 @@ export default function Coach(): JSX.Element {
         notes: ''
       }
     );
+    setIsWeekSectionOpen(true);
   };
 
   const onValidateWeekSummaryDraft = (): void => {
@@ -501,34 +508,43 @@ export default function Coach(): JSX.Element {
           <form className="form coach-feedback-form" onSubmit={(event) => void onSubmitFeedback(event)}>
             <article className="coach-feedback-section">
               <div className="coach-feedback-section-head">
-                <h3>Retours de séance</h3>
-                {!sessionDraft ? (
+                <button
+                  type="button"
+                  className="coach-section-toggle"
+                  onClick={() => setIsSessionsSectionOpen((prev) => !prev)}
+                >
+                  Retours de séance <span>{isSessionsSectionOpen ? '▾' : '▸'}</span>
+                </button>
+                {!sessionDraft && isSessionsSectionOpen ? (
                   <button type="button" className="coach-add-session-btn" onClick={onStartSessionDraft}>
                     + Ajouter une séance
                   </button>
                 ) : null}
               </div>
 
-              {savedSessionFeedbackRows.length ? (
+              {isSessionsSectionOpen ? (
+                savedSessionFeedbackRows.length ? (
                 <div className="coach-feedback-session-list">
                   {savedSessionFeedbackRows.map((row, index) => (
                     <article key={row.id} className="coach-feedback-session-card">
                       <div className="coach-feedback-session-head">
                         <h3>Séance validée {index + 1}</h3>
-                        <button
-                          type="button"
-                          className="coach-remove-session-btn"
-                          onClick={() => onEditSavedSession(row.id)}
-                        >
-                          Modifier
-                        </button>
-                        <button
-                          type="button"
-                          className="coach-remove-session-btn"
-                          onClick={() => onRemoveSavedSession(row.id)}
-                        >
-                          Supprimer
-                        </button>
+                        <div className="coach-feedback-session-head-actions">
+                          <button
+                            type="button"
+                            className="coach-remove-session-btn"
+                            onClick={() => onEditSavedSession(row.id)}
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            type="button"
+                            className="coach-remove-session-btn"
+                            onClick={() => onRemoveSavedSession(row.id)}
+                          >
+                            Supprimer
+                          </button>
+                        </div>
                       </div>
                       <p className="coach-feedback-summary-line">
                         <strong>{row.sessionLabel}</strong> · {row.distance} · {row.duration} · {row.pace} · RPE{' '}
@@ -540,11 +556,18 @@ export default function Coach(): JSX.Element {
                     </article>
                   ))}
                 </div>
+                ) : (
+                  <p className="coach-feedback-empty">Aucune séance validée pour le moment.</p>
+                )
               ) : (
-                <p className="coach-feedback-empty">Aucune séance validée pour le moment.</p>
+                <p className="coach-feedback-empty">
+                  {savedSessionFeedbackRows.length
+                    ? `${savedSessionFeedbackRows.length} séance(s) validée(s)`
+                    : 'Aucune séance validée'}
+                </p>
               )}
 
-              {sessionDraft ? (
+              {sessionDraft && isSessionsSectionOpen ? (
                 <article className="coach-feedback-session-card is-draft">
                   <div className="coach-feedback-session-head">
                     <h3>Brouillon de séance</h3>
@@ -643,15 +666,22 @@ export default function Coach(): JSX.Element {
 
             <article className="coach-feedback-section">
               <div className="coach-feedback-section-head">
-                <h3>Retour de semaine</h3>
-                {!weekSummaryDraft ? (
+                <button
+                  type="button"
+                  className="coach-section-toggle"
+                  onClick={() => setIsWeekSectionOpen((prev) => !prev)}
+                >
+                  Retour de semaine <span>{isWeekSectionOpen ? '▾' : '▸'}</span>
+                </button>
+                {!weekSummaryDraft && isWeekSectionOpen ? (
                   <button type="button" className="coach-add-session-btn" onClick={onStartWeekSummaryDraft}>
                     {weekSummary ? 'Modifier le retour de semaine' : 'Ajouter un retour de semaine'}
                   </button>
                 ) : null}
               </div>
 
-              {weekSummary ? (
+              {isWeekSectionOpen ? (
+                weekSummary ? (
                 <article className="coach-feedback-session-card">
                   <p className="coach-feedback-summary-line">
                     <strong>Sensations générales:</strong> {weekSummary.generalFeeling}
@@ -660,11 +690,16 @@ export default function Coach(): JSX.Element {
                     <strong>Notes libres:</strong> {weekSummary.notes || 'Aucune note libre'}
                   </p>
                 </article>
+                ) : (
+                  <p className="coach-feedback-empty">Aucun retour de semaine validé pour le moment.</p>
+                )
               ) : (
-                <p className="coach-feedback-empty">Aucun retour de semaine validé pour le moment.</p>
+                <p className="coach-feedback-empty">
+                  {weekSummary?.generalFeeling ? 'Retour de semaine validé' : 'Aucun retour de semaine validé'}
+                </p>
               )}
 
-              {weekSummaryDraft ? (
+              {weekSummaryDraft && isWeekSectionOpen ? (
                 <article className="coach-feedback-session-card is-draft">
                   <div className="coach-feedback-grid">
                     <label className="coach-feedback-field-full">
