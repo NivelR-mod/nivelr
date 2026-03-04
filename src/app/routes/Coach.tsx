@@ -495,7 +495,7 @@ export default function Coach(): JSX.Element {
       </article>
 
       {!loading && shouldShowFeedbackForm ? (
-        <article className="card premium-section coach-card">
+        <article className="card premium-section coach-card coach-feedback-card">
           <h2>Retour de semaine</h2>
           <p>
             Pour recevoir la semaine suivante, complète ce retour guidé sur ta semaine en cours.

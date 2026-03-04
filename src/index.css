@@ -6692,12 +6692,16 @@ textarea::placeholder {
   margin-top: 0.2rem;
 }
 
-.coach-feedback-form h2 {
-  margin: 0 0 0.12rem;
+.coach-feedback-card {
+  gap: 0.45rem;
 }
 
-.coach-feedback-form > p {
-  margin: 0 0 0.1rem;
+.coach-feedback-card > h2 {
+  margin: 0;
+}
+
+.coach-feedback-card > p {
+  margin: 0;
 }
 
 .coach-feedback-section {
