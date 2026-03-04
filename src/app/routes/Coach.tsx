@@ -233,7 +233,9 @@ export default function Coach(): JSX.Element {
     setWeekSummary(null);
     setWeekSummaryDraft(null);
     setIsEditingSubmittedFeedback(false);
-    setFeedbackSuccess('Retour envoyé. Ton coach peut préparer la semaine suivante.');
+    setFeedbackSuccess(
+      result.warning ?? 'Retour envoyé. Ton coach peut préparer la semaine suivante.'
+    );
     await refreshCoachData();
   };
 

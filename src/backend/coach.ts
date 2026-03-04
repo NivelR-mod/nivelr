@@ -262,19 +262,21 @@ export async function submitCoachFeedback(input: {
   weekNumber: number;
   feedbackText: string;
   readyForNextWeek: boolean;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; warning?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
   }
-  const userId = getSessionUserId();
-  if (!userId) {
+  const user = getCurrentSessionUser();
+  const userId = user?.id ?? null;
+  if (!userId || !user?.email) {
     return { ok: false, error: 'Connecte-toi pour envoyer ton retour.' };
   }
 
+  const trimmedFeedback = input.feedbackText.trim();
   const payload = {
     user_id: userId,
     week_number: input.weekNumber,
-    feedback_text: input.feedbackText.trim(),
+    feedback_text: trimmedFeedback,
     ready_for_next_week: input.readyForNextWeek,
     submitted_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -284,5 +286,34 @@ export async function submitCoachFeedback(input: {
     onConflict: 'user_id,week_number'
   });
   if (error) return { ok: false, error: error.message };
+
+  const coachMailSubject = `Coach - Retour semaine ${input.weekNumber} - ${user.handle}`;
+  const coachMailMessage = [
+    `Utilisateur: ${user.displayName} (@${user.handle})`,
+    `Email compte: ${user.email}`,
+    `Semaine: ${input.weekNumber}`,
+    `Prêt semaine suivante: ${input.readyForNextWeek ? 'Oui' : 'Non'}`,
+    '',
+    'Retour:',
+    trimmedFeedback
+  ].join('\n');
+
+  const notifyResult = await supabase!.functions.invoke<{ ok?: boolean; error?: string }>('send-contact-email', {
+    body: {
+      replyEmail: user.email,
+      senderName: `${user.displayName} (@${user.handle})`,
+      subject: coachMailSubject,
+      message: coachMailMessage
+    }
+  });
+
+  if (notifyResult.error || !notifyResult.data?.ok) {
+    return {
+      ok: true,
+      warning:
+        'Retour enregistré, mais l’email coach n’a pas pu être envoyé. Vérifie les secrets de la function send-contact-email.'
+    };
+  }
+
   return { ok: true };
 }
