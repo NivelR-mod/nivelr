@@ -650,6 +650,75 @@ export function signOutLocal(): void {
   emitAuthChanged();
 }
 
+function deleteLocalUserData(userId: string): void {
+  const users = readJson<StoredUser[]>(USERS_KEY, []);
+  writeJson(
+    USERS_KEY,
+    users.filter((user) => user.id !== userId)
+  );
+
+  const contacts = readJson<ContactRequest[]>(CONTACTS_KEY, []);
+  writeJson(
+    CONTACTS_KEY,
+    contacts.filter((item) => item.requesterUserId !== userId && item.targetUserId !== userId)
+  );
+
+  const teamInvites = readJson<TeamInvite[]>(TEAM_INVITES_KEY, []);
+  writeJson(
+    TEAM_INVITES_KEY,
+    teamInvites.filter((item) => item.inviterUserId !== userId && item.invitedUserId !== userId)
+  );
+
+  const subscriptions = readSubscriptions();
+  if (subscriptions[userId]) {
+    const nextSubscriptions = { ...subscriptions };
+    delete nextSubscriptions[userId];
+    writeSubscriptions(nextSubscriptions);
+  }
+
+  setAvatarForUser(userId, null);
+}
+
+export async function deleteCurrentAccountLocal(input: {
+  reasonCategory: string;
+  reasonDetail: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const session = getCurrentSessionUser();
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  if (REMOTE_AUTH_ENABLED && supabase) {
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token?.trim() ?? '';
+    if (!accessToken) {
+      return { ok: false, error: 'Session expirée. Reconnecte-toi puis réessaie.' };
+    }
+
+    const invoke = await supabase.functions.invoke<{ ok?: boolean; error?: string }>('delete-user-account', {
+      body: {
+        reasonCategory: input.reasonCategory.trim(),
+        reasonDetail: input.reasonDetail.trim()
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (invoke.error || !invoke.data?.ok) {
+      return {
+        ok: false,
+        error:
+          invoke.data?.error ??
+          invoke.error?.message ??
+          "Suppression impossible pour l'instant. Réessaie dans quelques instants."
+      };
+    }
+  }
+
+  deleteLocalUserData(session.id);
+  signOutLocal();
+  return { ok: true };
+}
+
 export async function signInLocal(
   email: string,
   password: string

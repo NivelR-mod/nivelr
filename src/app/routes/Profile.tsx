@@ -15,6 +15,7 @@ import {
   isModoEnabledLocal,
   isRemoteAuthEnabledLocal,
   listMarketingContactsLocal,
+  deleteCurrentAccountLocal,
   signOutLocal,
   SidebarStatsScope,
   setSidebarStatsScopeLocal,
@@ -51,6 +52,11 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
   const [contactMessage, setContactMessage] = useState('');
   const [sidebarMessage, setSidebarMessage] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteReasonCategory, setDeleteReasonCategory] = useState('');
+  const [deleteReasonOther, setDeleteReasonOther] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState('');
   const [progressRows, setProgressRows] = useState<RemoteUserProgressEntry[]>([]);
   const [progressLoading, setProgressLoading] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState(getLastRemoteProgressSyncStatus());
@@ -267,6 +273,47 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
     setAdminMessage(`Sauvegarde cloud exportée (${result.rows.length} utilisateur(s)).`);
   };
 
+  const deleteReasonOptions = [
+    { value: 'TOO_EXPENSIVE', label: "C'est trop cher" },
+    { value: 'NOT_USEFUL', label: "Je n'en ai plus l'utilité" },
+    { value: 'TOO_COMPLEX', label: "L'app est trop complexe" },
+    { value: 'TECH_ISSUES', label: 'J’ai des problèmes techniques' },
+    { value: 'MISSING_FEATURES', label: 'Fonctionnalités manquantes' },
+    { value: 'OTHER', label: 'Autre' }
+  ];
+
+  const onDeleteAccount = async (): Promise<void> => {
+    setError('');
+    setDeleteMessage('');
+    const category = deleteReasonCategory.trim();
+    if (!category) {
+      setDeleteMessage('Sélectionne un motif avant de confirmer.');
+      return;
+    }
+    if (category === 'OTHER' && deleteReasonOther.trim().length < 4) {
+      setDeleteMessage('Précise ton motif dans "Autre".');
+      return;
+    }
+
+    const selected = deleteReasonOptions.find((item) => item.value === category);
+    const label = selected?.label ?? category;
+    const detail =
+      category === 'OTHER' ? `Autre: ${deleteReasonOther.trim()}` : `${label}${deleteReasonOther.trim() ? ` — ${deleteReasonOther.trim()}` : ''}`;
+
+    setDeleteLoading(true);
+    const result = await deleteCurrentAccountLocal({
+      reasonCategory: category,
+      reasonDetail: detail
+    });
+    setDeleteLoading(false);
+    if (!result.ok) {
+      setDeleteMessage(result.error ?? 'Suppression impossible pour le moment.');
+      return;
+    }
+    setDeleteModalOpen(false);
+    navigate('/explications');
+  };
+
   return (
     <section className="page profile-page">
       <h1>Profil</h1>
@@ -343,6 +390,18 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
             }}
           >
             Se déconnecter
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              setDeleteReasonCategory('');
+              setDeleteReasonOther('');
+              setDeleteMessage('');
+              setDeleteModalOpen(true);
+            }}
+          >
+            Supprimer mon compte
           </button>
         </div>
       </article>
@@ -613,6 +672,53 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
         ) : null}
 
       </div>
+
+      {deleteModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setDeleteModalOpen(false)}>
+          <article className="card session-modal style-confirm-modal profile-delete-modal" onClick={(event) => event.stopPropagation()}>
+            <h2>Supprimer définitivement le compte ?</h2>
+            <p>
+              Cette action est irréversible. Avant suppression, indique la raison de ton départ pour améliorer NIVELR.
+            </p>
+            <label>
+              Raison principale
+              <select
+                value={deleteReasonCategory}
+                onChange={(event) => setDeleteReasonCategory(event.target.value)}
+                disabled={deleteLoading}
+              >
+                <option value="">Choisir une raison</option>
+                {deleteReasonOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {deleteReasonCategory === 'OTHER' ? (
+              <label>
+                Autre
+                <textarea
+                  value={deleteReasonOther}
+                  onChange={(event) => setDeleteReasonOther(event.target.value)}
+                  placeholder="Précise la raison..."
+                  rows={4}
+                  disabled={deleteLoading}
+                />
+              </label>
+            ) : null}
+            {deleteMessage ? <p className="error">{deleteMessage}</p> : null}
+            <div className="modal-actions">
+              <button type="button" onClick={() => setDeleteModalOpen(false)} disabled={deleteLoading}>
+                Annuler
+              </button>
+              <button type="button" className="danger" onClick={() => void onDeleteAccount()} disabled={deleteLoading}>
+                {deleteLoading ? 'Suppression...' : 'Confirmer la suppression'}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </section>
   );
 }

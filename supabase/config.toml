@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.get-coach-program-url]
 verify_jwt = false
+
+[functions.delete-user-account]
+verify_jwt = false

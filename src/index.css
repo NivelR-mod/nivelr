@@ -6644,6 +6644,19 @@ textarea::placeholder {
   color: #b7d6de;
 }
 
+.profile-delete-modal {
+  border-color: rgba(199, 63, 57, 0.42);
+  background: linear-gradient(180deg, #fff7f7, #fff2f2);
+}
+
+.profile-delete-modal h2 {
+  color: #5f1d1d;
+}
+
+.profile-delete-modal p {
+  color: #6d3a3a;
+}
+
 .coach-cta-row {
   display: flex;
   align-items: center;
