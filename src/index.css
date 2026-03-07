@@ -5452,6 +5452,30 @@ textarea::placeholder {
   gap: 0.68rem;
 }
 
+.profile-delete-zone {
+  margin-top: 0.1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-delete-btn {
+  border: 1px dashed rgba(199, 63, 57, 0.34);
+  border-radius: 10px;
+  background: rgba(199, 63, 57, 0.07);
+  color: rgba(255, 211, 211, 0.7);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.28rem 0.52rem;
+  opacity: 0.74;
+  transition: opacity 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.profile-delete-btn:hover {
+  opacity: 1;
+  border-color: rgba(199, 63, 57, 0.56);
+  background: rgba(199, 63, 57, 0.13);
+}
+
 .profile-grid-premium .profile-card {
   border-color: rgba(133, 204, 210, 0.36);
   box-shadow: 0 12px 30px rgba(8, 21, 31, 0.1);

@@ -391,18 +391,6 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
           >
             Se déconnecter
           </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={() => {
-              setDeleteReasonCategory('');
-              setDeleteReasonOther('');
-              setDeleteMessage('');
-              setDeleteModalOpen(true);
-            }}
-          >
-            Supprimer mon compte
-          </button>
         </div>
       </article>
 
@@ -671,6 +659,21 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
           </article>
         ) : null}
 
+      </div>
+
+      <div className="profile-delete-zone">
+        <button
+          type="button"
+          className="profile-delete-btn"
+          onClick={() => {
+            setDeleteReasonCategory('');
+            setDeleteReasonOther('');
+            setDeleteMessage('');
+            setDeleteModalOpen(true);
+          }}
+        >
+          Supprimer mon compte
+        </button>
       </div>
 
       {deleteModalOpen ? (
