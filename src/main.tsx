@@ -1055,7 +1055,8 @@ function App(): JSX.Element {
         return additions.length ? [...current, ...additions] : current;
       });
     }
-    window.localStorage.setItem(storageKey, JSON.stringify(unlockedIds));
+    const nextSeen = Array.from(new Set([...previouslySeen, ...unlockedIds]));
+    window.localStorage.setItem(storageKey, JSON.stringify(nextSeen));
   }, [currentUserId, unlockedBadgePreviews, activeBadgeUnlock]);
 
   useEffect(() => {

@@ -256,7 +256,8 @@ export default function Badges({
     const newlyUnlocked = unlockedBadgeIds.filter((id) => !previouslySeen.has(id));
     setRevealedBadgeIds(new Set(newlyUnlocked.length ? newlyUnlocked : unlockedBadgeIds));
     setNewBadgeIds(new Set(newlyUnlocked));
-    window.localStorage.setItem(storageKey, JSON.stringify(unlockedBadgeIds));
+    const nextSeen = Array.from(new Set([...previouslySeen, ...unlockedBadgeIds]));
+    window.localStorage.setItem(storageKey, JSON.stringify(nextSeen));
 
     if (newlyUnlocked.length) {
       const timeoutId = window.setTimeout(() => setNewBadgeIds(new Set()), 2000);
