@@ -1,4 +1,4 @@
-import { CSSProperties, useState } from 'react';
+import { CSSProperties, useEffect, useState } from 'react';
 import ProgressBar from '../../components/ProgressBar';
 import {
   getLevelFromXp,
@@ -200,6 +200,7 @@ export default function Home({
   const [curveMetric, setCurveMetric] = useState<CurveMetric>('MINUTES');
   const [curvePeriod, setCurvePeriod] = useState<CurvePeriod>('WEEK');
   const [curvePage, setCurvePage] = useState(0);
+  const [selectedCurveBucketKey, setSelectedCurveBucketKey] = useState<string | null>(null);
   const [focusedDay, setFocusedDay] = useState<FocusedDay | null>(null);
   const appStartBucket = bucketStartForPeriod(APP_START_DATE, curvePeriod);
   const currentBucket = bucketStartForPeriod(new Date(), curvePeriod);
@@ -262,6 +263,10 @@ export default function Home({
   const currentPeriodValue = curveData.valuesByBucket.get(curveData.currentBucketKey) ?? 0;
   const canGoToPast = safeCurvePage < maxPastPage;
   const canGoToFuture = safeCurvePage > -2;
+
+  useEffect(() => {
+    setSelectedCurveBucketKey(null);
+  }, [curveMetric, curvePeriod, safeCurvePage]);
 
   const currentWeekStart = (() => {
     const start = startOfIsoWeek(new Date());
@@ -520,14 +525,35 @@ export default function Home({
               const height = Math.max(4, (item.value / maxValue) * 100);
               const isCurrent = item.bucketKey === curveData.currentBucketKey;
               const isBest = item.bucketKey === bestBucket.bucketKey;
+              const isSelected = item.bucketKey === selectedCurveBucketKey;
+              const tooltipValue = curveMetric === 'DISTANCE' ? item.value.toFixed(1) : Math.round(item.value);
+              const tooltipLabel = formatBucketTooltip(item.bucketStart, curvePeriod);
               return (
                 <div
                   key={item.bucketKey}
-                  className={`bar-col ${isCurrent ? 'is-current' : ''} ${isBest ? 'is-best' : ''}`}
-                  title={`${formatBucketTooltip(item.bucketStart, curvePeriod)}: ${
-                    curveMetric === 'DISTANCE' ? item.value.toFixed(1) : Math.round(item.value)
-                  }${curveMetricUnit(curveMetric)}`}
+                  className={`bar-col ${isCurrent ? 'is-current' : ''} ${isBest ? 'is-best' : ''} ${
+                    isSelected ? 'is-selected' : ''
+                  }`}
+                  title={`${tooltipLabel}: ${tooltipValue}${curveMetricUnit(curveMetric)}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${tooltipLabel}: ${tooltipValue}${curveMetricUnit(curveMetric)}`}
+                  onClick={() =>
+                    setSelectedCurveBucketKey((prev) => (prev === item.bucketKey ? null : item.bucketKey))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedCurveBucketKey((prev) => (prev === item.bucketKey ? null : item.bucketKey));
+                    }
+                  }}
                 >
+                  {isSelected ? (
+                    <div className="bar-tooltip">
+                      <strong>{tooltipValue}{curveMetricUnit(curveMetric)}</strong>
+                      <span>{tooltipLabel}</span>
+                    </div>
+                  ) : null}
                   <div className="bar-track">
                     <div className="bar-fill" style={{ height: `${height}%` }} />
                   </div>

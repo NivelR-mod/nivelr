@@ -2948,9 +2948,20 @@ textarea:focus {
 }
 
 .bar-col {
+  position: relative;
   display: grid;
   align-items: end;
   gap: 0.24rem;
+  cursor: pointer;
+}
+
+.bar-col:focus-visible {
+  outline: none;
+}
+
+.bar-col:focus-visible .bar-track {
+  border-color: rgba(255, 214, 143, 0.8);
+  box-shadow: 0 0 0 2px rgba(255, 214, 143, 0.2);
 }
 
 .bar-track {
@@ -2977,6 +2988,41 @@ textarea:focus {
 .bar-col.is-best .bar-track {
   border-color: rgba(87, 208, 201, 0.85);
   box-shadow: 0 0 0 1px rgba(87, 208, 201, 0.24);
+}
+
+.bar-col.is-selected .bar-track {
+  border-color: rgba(255, 214, 143, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 214, 143, 0.26);
+}
+
+.bar-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.3rem);
+  transform: translateX(-50%);
+  min-width: 110px;
+  max-width: 160px;
+  border: 1px solid rgba(255, 214, 143, 0.5);
+  border-radius: 10px;
+  padding: 0.34rem 0.44rem;
+  background: linear-gradient(180deg, rgba(16, 28, 35, 0.96), rgba(8, 18, 24, 0.98));
+  color: #ecfbff;
+  display: grid;
+  gap: 0.1rem;
+  text-align: center;
+  z-index: 3;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+}
+
+.bar-tooltip strong {
+  font-size: 0.79rem;
+  line-height: 1.1;
+}
+
+.bar-tooltip span {
+  font-size: 0.7rem;
+  color: #cbe5ec;
+  line-height: 1.15;
 }
 
 .bar-label {
