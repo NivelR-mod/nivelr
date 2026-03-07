@@ -1747,6 +1747,39 @@ textarea:focus {
   width: min(640px, 100%);
 }
 
+.unlock-badge-modal {
+  width: min(460px, 100%);
+  text-align: center;
+  border-color: rgba(255, 214, 143, 0.62);
+  background: linear-gradient(160deg, #fffaf1, #fff5e8);
+}
+
+.unlock-badge-art-wrap {
+  margin: 0.4rem auto 0.25rem;
+  width: min(220px, 72vw);
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 214, 143, 0.5);
+  background: radial-gradient(circle at 50% 30%, #fff8e6, #ffe9c2 68%, #ffdca3);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 18px 34px rgba(39, 27, 5, 0.18);
+}
+
+.unlock-badge-art {
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
+}
+
+.unlock-badge-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #6a4a14;
+}
+
 .unlock-level-list {
   display: grid;
   gap: 0.55rem;

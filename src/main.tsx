@@ -109,6 +109,122 @@ interface UnlockContent {
   features: string[];
 }
 
+interface BadgeUnlockPreview {
+  id: string;
+  title: string;
+  art: string;
+}
+
+type GamificationMissionUiEntry = ReturnType<typeof getMissionsForUi>[number];
+
+const CUSTOM_BADGE_BASE = '/badges/custom';
+const FULL_TEAM_SIZE = 4;
+const CUSTOM_BADGES = {
+  bronze: `${CUSTOM_BADGE_BASE}/Badge_bronze.png`,
+  silver: `${CUSTOM_BADGE_BASE}/Badge_argent.png`,
+  gold: `${CUSTOM_BADGE_BASE}/Badge_or.png`,
+  platinum: `${CUSTOM_BADGE_BASE}/Badge_platine.png`,
+  participant: `${CUSTOM_BADGE_BASE}/Badge_participant.png`,
+  equipe: `${CUSTOM_BADGE_BASE}/Badge_equipe.png`,
+  capitaine: `${CUSTOM_BADGE_BASE}/Badge_capitaine.png`,
+  saisonBronze: `${CUSTOM_BADGE_BASE}/Badge_saison_1_bronze.png`,
+  saisonSilver: `${CUSTOM_BADGE_BASE}/Badge_saison_1_argent.png`,
+  saisonGold: `${CUSTOM_BADGE_BASE}/Badge_saison_1_or.png`,
+  saisonPlatinum: `${CUSTOM_BADGE_BASE}/Badge_saison_1_platine.png`,
+  niv5: `${CUSTOM_BADGE_BASE}/Badge_niv5.png`,
+  niv10: `${CUSTOM_BADGE_BASE}/Badge_niv10.png`,
+  niv15: `${CUSTOM_BADGE_BASE}/Badge_niv15.png`,
+  niv20: `${CUSTOM_BADGE_BASE}/Badge_niv20.png`,
+  niv25: `${CUSTOM_BADGE_BASE}/Badge_niv25.png`,
+  niv30: `${CUSTOM_BADGE_BASE}/Badge_niv30.png`,
+  weeklyMissions: `${CUSTOM_BADGE_BASE}/Missions_hebdo.png`
+} as const;
+
+function computeUnlockedBadgePreviews(
+  gamificationState: GamificationState,
+  gamificationMissions: GamificationMissionUiEntry[],
+  level: number,
+  currentUserId: string
+): BadgeUnlockPreview[] {
+  const tierBadge = (
+    id: string,
+    title: string,
+    tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM',
+    art: string
+  ): BadgeUnlockPreview | null => {
+    const tierMissions = gamificationMissions.filter((item) => item.mission.tier === tier);
+    if (!tierMissions.length) return null;
+    const claimed = tierMissions.filter((item) => item.status === 'CLAIMED').length;
+    return claimed === tierMissions.length ? { id, title, art } : null;
+  };
+
+  const currentSeason =
+    gamificationState.ascension.seasons.find(
+      (season) => season.id === gamificationState.ascension.currentSeasonId
+    ) ?? null;
+  const seasonId = currentSeason?.id ?? '';
+  const hasTeamMembership = gamificationState.ascension.teamMembers.some(
+    (member) => member.userId === currentUserId && member.seasonId === seasonId && member.leftAt == null
+  );
+  const ownedTeamsInSeason = gamificationState.ascension.teams.filter(
+    (team) => team.seasonId === seasonId && team.ownerUserId === currentUserId
+  );
+  const isTeamOwner = ownedTeamsInSeason.length > 0;
+  const hasCreatedFullTeam = ownedTeamsInSeason.some((team) => {
+    const activeMembers = gamificationState.ascension.teamMembers.filter(
+      (member) => member.seasonId === seasonId && member.teamId === team.id && member.leftAt == null
+    );
+    return activeMembers.length >= FULL_TEAM_SIZE;
+  });
+  const reachedMilestones = new Set(currentSeason?.milestoneReached ?? []);
+  const seasonStarted = currentSeason ? currentSeason.status !== 'UPCOMING' : false;
+  const weeklyMissionsClaimed = gamificationState.userXpLog.filter(
+    (entry) => entry.reason === 'MISSION_CLAIM' && entry.sourceRef.startsWith('legacy-mission:weekly-')
+  ).length;
+
+  const levelBadges: BadgeUnlockPreview[] = [
+    { id: 'level-5', title: 'Niveau 5', art: CUSTOM_BADGES.niv5 },
+    { id: 'level-10', title: 'Niveau 10', art: CUSTOM_BADGES.niv10 },
+    { id: 'level-15', title: 'Niveau 15', art: CUSTOM_BADGES.niv15 },
+    { id: 'level-20', title: 'Niveau 20', art: CUSTOM_BADGES.niv20 },
+    { id: 'level-25', title: 'Niveau 25', art: CUSTOM_BADGES.niv25 },
+    { id: 'level-30', title: 'Niveau 30', art: CUSTOM_BADGES.niv30 }
+  ].filter((badge) => {
+    const target = Number(badge.id.replace('level-', ''));
+    return level >= target;
+  });
+
+  const all = [
+    tierBadge('missions-bronze', 'Bronze', 'BRONZE', CUSTOM_BADGES.bronze),
+    tierBadge('missions-silver', 'Argent', 'SILVER', CUSTOM_BADGES.silver),
+    tierBadge('missions-gold', 'Or', 'GOLD', CUSTOM_BADGES.gold),
+    tierBadge('missions-platinum', 'Platine', 'PLATINUM', CUSTOM_BADGES.platinum),
+    weeklyMissionsClaimed >= 50 ? { id: 'weekly-missions-50', title: 'Missions hebdo', art: CUSTOM_BADGES.weeklyMissions } : null,
+    seasonStarted && hasTeamMembership
+      ? { id: 'season-1-participant', title: 'Saison 1 - Participant', art: CUSTOM_BADGES.participant }
+      : null,
+    hasTeamMembership ? { id: 'season-1-team', title: 'Rejoindre une équipe', art: CUSTOM_BADGES.equipe } : null,
+    isTeamOwner && hasCreatedFullTeam
+      ? { id: 'season-1-founder', title: 'Capitaine', art: CUSTOM_BADGES.capitaine }
+      : null,
+    reachedMilestones.has(25)
+      ? { id: 'season-1-camp-25', title: 'Camp 25%', art: CUSTOM_BADGES.saisonBronze }
+      : null,
+    reachedMilestones.has(50)
+      ? { id: 'season-1-camp-50', title: 'Camp 50%', art: CUSTOM_BADGES.saisonSilver }
+      : null,
+    reachedMilestones.has(75)
+      ? { id: 'season-1-camp-75', title: 'Camp 75%', art: CUSTOM_BADGES.saisonGold }
+      : null,
+    reachedMilestones.has(100)
+      ? { id: 'season-1-summit', title: 'Sommet 100%', art: CUSTOM_BADGES.saisonPlatinum }
+      : null,
+    ...levelBadges
+  ];
+
+  return all.filter((badge): badge is BadgeUnlockPreview => Boolean(badge));
+}
+
 function toSessionInput(session: Session): SessionInput {
   return {
     sportType: session.sportType,
@@ -234,6 +350,8 @@ function App(): JSX.Element {
   const [pendingImport, setPendingImport] = useState<ImportPreviewState | null>(null);
   const [deletedBuffer, setDeletedBuffer] = useState<{ session: Session; timeoutId: number } | null>(null);
   const [unlockModalLevels, setUnlockModalLevels] = useState<number[]>([]);
+  const [badgeUnlockQueue, setBadgeUnlockQueue] = useState<BadgeUnlockPreview[]>([]);
+  const [activeBadgeUnlock, setActiveBadgeUnlock] = useState<BadgeUnlockPreview | null>(null);
   const [sessionUser, setSessionUser] = useState(() => getCurrentSessionUser());
   const [cloudHydrationDone, setCloudHydrationDone] = useState(false);
   const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
@@ -898,6 +1016,13 @@ function App(): JSX.Element {
   const gamificationMissions = GAMIFICATION_V1_ENABLED
     ? getMissionsForUi(state.sessions, gamificationState)
     : [];
+  const currentUserId = (sessionUser?.id ?? gamificationState.userId ?? '').trim();
+  const unlockedBadgePreviews = computeUnlockedBadgePreviews(
+    gamificationState,
+    gamificationMissions,
+    displayLevel,
+    currentUserId
+  );
   const weekContext = {
     sessions: state.sessions,
     weekSessions: state.sessions.filter(
@@ -910,6 +1035,32 @@ function App(): JSX.Element {
   const v1MissionNotifCount = gamificationMissions.filter((item) => item.status === 'DONE').length;
   const missionNotifCount = legacyMissionNotifCount + v1MissionNotifCount;
   const badgesNotifCount = gamificationState.unlockNotifications.filter((item) => !item.seen).length;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !currentUserId) return;
+    const storageKey = `nivelr_badges_seen_${currentUserId}`;
+    const raw = window.localStorage.getItem(storageKey);
+    const previouslySeen = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    const unlockedIds = unlockedBadgePreviews.map((badge) => badge.id);
+    const newlyUnlocked = unlockedBadgePreviews.filter((badge) => !previouslySeen.has(badge.id));
+    if (newlyUnlocked.length) {
+      setBadgeUnlockQueue((current) => {
+        const existing = new Set([
+          ...current.map((item) => item.id),
+          ...(activeBadgeUnlock ? [activeBadgeUnlock.id] : [])
+        ]);
+        const additions = newlyUnlocked.filter((item) => !existing.has(item.id));
+        return additions.length ? [...current, ...additions] : current;
+      });
+    }
+    window.localStorage.setItem(storageKey, JSON.stringify(unlockedIds));
+  }, [currentUserId, unlockedBadgePreviews, activeBadgeUnlock]);
+
+  useEffect(() => {
+    if (activeBadgeUnlock || !badgeUnlockQueue.length) return;
+    setActiveBadgeUnlock(badgeUnlockQueue[0]);
+    setBadgeUnlockQueue((current) => current.slice(1));
+  }, [activeBadgeUnlock, badgeUnlockQueue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1235,6 +1386,24 @@ function App(): JSX.Element {
                   <div className="modal-actions">
                     <button type="button" onClick={closeUnlockModal}>
                       Génial, continuer
+                    </button>
+                  </div>
+                </article>
+              </div>
+            ) : null}
+
+            {activeBadgeUnlock ? (
+              <div className="modal-backdrop" role="dialog" aria-modal="true">
+                <article className="card session-modal unlock-badge-modal">
+                  <p className="page-subtitle">Badge débloqué</p>
+                  <h2>Félicitations !</h2>
+                  <div className="unlock-badge-art-wrap">
+                    <img src={activeBadgeUnlock.art} alt={activeBadgeUnlock.title} className="unlock-badge-art" />
+                  </div>
+                  <p className="unlock-badge-title">{activeBadgeUnlock.title}</p>
+                  <div className="modal-actions">
+                    <button type="button" onClick={() => setActiveBadgeUnlock(null)}>
+                      Continuer
                     </button>
                   </div>
                 </article>
