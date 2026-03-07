@@ -1016,13 +1016,15 @@ function App(): JSX.Element {
   const gamificationMissions = GAMIFICATION_V1_ENABLED
     ? getMissionsForUi(state.sessions, gamificationState)
     : [];
-  const currentUserId = (sessionUser?.id ?? gamificationState.userId ?? '').trim();
-  const unlockedBadgePreviews = computeUnlockedBadgePreviews(
-    gamificationState,
-    gamificationMissions,
-    displayLevel,
-    currentUserId
-  );
+  const currentUserId = (sessionUser?.id ?? '').trim();
+  const unlockedBadgePreviews = currentUserId
+    ? computeUnlockedBadgePreviews(
+        gamificationState,
+        gamificationMissions,
+        displayLevel,
+        currentUserId
+      )
+    : [];
   const weekContext = {
     sessions: state.sessions,
     weekSessions: state.sessions.filter(
@@ -1055,6 +1057,12 @@ function App(): JSX.Element {
     }
     window.localStorage.setItem(storageKey, JSON.stringify(unlockedIds));
   }, [currentUserId, unlockedBadgePreviews, activeBadgeUnlock]);
+
+  useEffect(() => {
+    if (currentUserId) return;
+    setActiveBadgeUnlock(null);
+    setBadgeUnlockQueue([]);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (activeBadgeUnlock || !badgeUnlockQueue.length) return;
