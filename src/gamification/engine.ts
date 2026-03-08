@@ -304,8 +304,9 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
       nextProgress[mission.id] = {
         userId: state.userId,
         missionId: mission.id,
-        progressValue: Math.max(0, rawProgress),
-        unlockBaseline: 0,
+        // Une mission verrouillée ne doit pas avancer visiblement avant déblocage.
+        progressValue: 0,
+        unlockBaseline: Math.max(0, current?.unlockBaseline ?? 0),
         status: 'LOCKED',
         updatedAt: nowIso,
         unlockedAt: current?.unlockedAt ?? nowIso,
@@ -315,12 +316,13 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
     }
 
     if (!current) {
-      const initialProgress = Math.max(0, rawProgress);
+      const unlockBaseline = Math.max(0, rawProgress);
+      const initialProgress = 0;
       nextProgress[mission.id] = {
         userId: state.userId,
         missionId: mission.id,
         progressValue: initialProgress,
-        unlockBaseline: 0,
+        unlockBaseline,
         status:
           initialProgress >= mission.criterion.target
             ? 'DONE'
@@ -336,13 +338,18 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
       nextProgress[mission.id] = {
         ...current,
         progressValue: Math.max(current.progressValue ?? 0, mission.criterion.target),
-        unlockBaseline: 0,
+        unlockBaseline: Math.max(0, current.unlockBaseline ?? 0),
         updatedAt: nowIso
       };
       continue;
     }
 
-    const absoluteProgress = Math.max(0, rawProgress);
+    // Transition LOCKED -> IN_PROGRESS : on fige le baseline au moment exact du déblocage.
+    const unlockBaseline =
+      current.status === 'LOCKED'
+        ? Math.max(0, rawProgress)
+        : Math.max(0, current.unlockBaseline ?? 0);
+    const absoluteProgress = Math.max(0, rawProgress - unlockBaseline);
     const status: MissionProgressStatus =
       absoluteProgress >= mission.criterion.target ? 'DONE' : 'IN_PROGRESS';
 
@@ -350,7 +357,7 @@ function refreshMissionProgress(state: GamificationState, sessions: Session[], d
       userId: state.userId,
       missionId: mission.id,
       progressValue: absoluteProgress,
-      unlockBaseline: 0,
+      unlockBaseline,
       status,
       updatedAt: nowIso,
       unlockedAt: current.unlockedAt ?? nowIso,
