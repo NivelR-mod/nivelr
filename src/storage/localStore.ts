@@ -50,6 +50,7 @@ export function createDefaultState(): AppState {
     bonusXp: 0,
     completedMissions: [],
     weeklyClaimedMissions: [],
+    seenBadgePopupIds: [],
     missionWeekKey: getCurrentWeekKey(),
     goals: { ...DEFAULT_GOALS }
   };
@@ -285,6 +286,9 @@ export function normalizeState(input: unknown): AppState {
       : [],
     weeklyClaimedMissions: Array.isArray(safeParsed.weeklyClaimedMissions)
       ? safeParsed.weeklyClaimedMissions.filter((id): id is string => typeof id === 'string')
+      : [],
+    seenBadgePopupIds: Array.isArray(safeParsed.seenBadgePopupIds)
+      ? safeParsed.seenBadgePopupIds.filter((id): id is string => typeof id === 'string')
       : [],
     missionWeekKey: asString(safeParsed.missionWeekKey) ?? defaultState.missionWeekKey,
     goals: sanitizeGoals(safeParsed.goals),

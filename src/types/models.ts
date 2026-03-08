@@ -99,6 +99,7 @@ export interface AppState {
   bonusXp: number;
   completedMissions: string[];
   weeklyClaimedMissions: string[];
+  seenBadgePopupIds: string[];
   missionWeekKey: string;
   goals: GoalConfig;
   runnerAssessment?: RunnerAssessmentSnapshot;

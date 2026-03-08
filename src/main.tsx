@@ -1039,12 +1039,28 @@ function App(): JSX.Element {
   const badgesNotifCount = gamificationState.unlockNotifications.filter((item) => !item.seen).length;
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !currentUserId) return;
-    const storageKey = `nivelr_badges_seen_${currentUserId}`;
-    const raw = window.localStorage.getItem(storageKey);
-    const previouslySeen = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
-    const unlockedIds = unlockedBadgePreviews.map((badge) => badge.id);
-    const newlyUnlocked = unlockedBadgePreviews.filter((badge) => !previouslySeen.has(badge.id));
+    if (!currentUserId) return;
+    if (typeof window !== 'undefined' && state.seenBadgePopupIds.length === 0) {
+      const legacyKey = `nivelr_badges_seen_${currentUserId}`;
+      const legacyRaw = window.localStorage.getItem(legacyKey);
+      if (legacyRaw) {
+        try {
+          const legacyIds = (JSON.parse(legacyRaw) as unknown[]).filter(
+            (item): item is string => typeof item === 'string' && item.trim().length > 0
+          );
+          if (legacyIds.length) {
+            setState((prev) => ({
+              ...prev,
+              seenBadgePopupIds: Array.from(new Set([...prev.seenBadgePopupIds, ...legacyIds]))
+            }));
+          }
+        } catch {
+          // no-op
+        }
+      }
+    }
+    const seen = new Set(state.seenBadgePopupIds ?? []);
+    const newlyUnlocked = unlockedBadgePreviews.filter((badge) => !seen.has(badge.id));
     if (newlyUnlocked.length) {
       setBadgeUnlockQueue((current) => {
         const existing = new Set([
@@ -1055,9 +1071,7 @@ function App(): JSX.Element {
         return additions.length ? [...current, ...additions] : current;
       });
     }
-    const nextSeen = Array.from(new Set([...previouslySeen, ...unlockedIds]));
-    window.localStorage.setItem(storageKey, JSON.stringify(nextSeen));
-  }, [currentUserId, unlockedBadgePreviews, activeBadgeUnlock]);
+  }, [currentUserId, unlockedBadgePreviews, activeBadgeUnlock, state.seenBadgePopupIds]);
 
   useEffect(() => {
     if (currentUserId) return;
@@ -1411,7 +1425,18 @@ function App(): JSX.Element {
                   </div>
                   <p className="unlock-badge-title">{activeBadgeUnlock.title}</p>
                   <div className="modal-actions">
-                    <button type="button" onClick={() => setActiveBadgeUnlock(null)}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const seenId = activeBadgeUnlock.id;
+                        setState((prev) =>
+                          prev.seenBadgePopupIds.includes(seenId)
+                            ? prev
+                            : { ...prev, seenBadgePopupIds: [...prev.seenBadgePopupIds, seenId] }
+                        );
+                        setActiveBadgeUnlock(null);
+                      }}
+                    >
                       Continuer
                     </button>
                   </div>
