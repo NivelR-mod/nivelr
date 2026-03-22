@@ -803,7 +803,7 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
             <div className="coach-inline-panel-head">
               <div>
                 <p className="recommendation-kicker">Suivi coach</p>
-                <h3>Cette semaine partira automatiquement dimanche à 18h</h3>
+                <h3>Cette semaine partira automatiquement dimanche à 20h30</h3>
               </div>
               {!coachHubData.feedbackAlreadySent ? (
                 <button
@@ -826,7 +826,7 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
                     day: '2-digit',
                     month: 'long'
                   })}{' '}
-                  à 18:00
+                  à 20:30
                 </strong>
               </article>
               <article className="coach-inline-stat">

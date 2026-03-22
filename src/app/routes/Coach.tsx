@@ -22,7 +22,7 @@ function formatDeadlineLabel(deadline: Date): string {
     weekday: 'long',
     day: '2-digit',
     month: 'long'
-  }) + ' à 18:00';
+  }) + ' à 20:30';
 }
 
 export default function Coach({ sessions }: CoachProps): JSX.Element {

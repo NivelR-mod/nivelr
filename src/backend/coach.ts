@@ -110,7 +110,7 @@ export function getCoachSubmissionDeadline(now: Date = new Date()): Date {
   const day = deadline.getDay();
   const deltaToSunday = day === 0 ? 0 : 7 - day;
   deadline.setDate(deadline.getDate() + deltaToSunday);
-  deadline.setHours(18, 0, 0, 0);
+  deadline.setHours(20, 30, 0, 0);
   return deadline;
 }
 
