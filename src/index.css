@@ -992,12 +992,11 @@ button.danger {
   max-width: 980px;
 }
 
-/* Home compact mode: keep all key cards visible without vertical scroll on desktop */
 .page-home {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 0.42rem;
-  height: calc(100vh - 2.3rem);
+  grid-template-rows: auto;
+  gap: 0.62rem;
+  height: auto;
 }
 
 .page-home .card {
@@ -2334,6 +2333,32 @@ textarea:focus {
   border-color: rgba(102, 206, 200, 0.4);
 }
 
+.guide-tabs {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
+.guide-tabs button {
+  border: 1px solid rgba(150, 214, 220, 0.42);
+  border-radius: 999px;
+  background: rgba(8, 18, 24, 0.42);
+  color: #cbe4ea;
+  padding: 0.28rem 0.66rem;
+  font-weight: 700;
+}
+
+.guide-tabs button.is-active {
+  border-color: rgba(130, 234, 227, 0.68);
+  background: linear-gradient(135deg, rgba(39, 131, 128, 0.55), rgba(18, 96, 104, 0.5));
+  color: #f2fdff;
+}
+
+.guide-panel-grid {
+  margin-top: 0.75rem;
+}
+
 .xp-guide-dashboard {
   margin-top: 0.95rem;
   display: grid;
@@ -2942,6 +2967,230 @@ textarea:focus {
   margin: 0.45rem 0 0;
   color: #d7ecfc;
   line-height: 1.35;
+}
+
+.progression-index-card {
+  margin-top: 0.62rem;
+  border: 1px solid #89bde4;
+  border-radius: 14px;
+  padding: 0.72rem;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(181, 228, 255, 0.2), transparent 34%),
+    linear-gradient(160deg, #10293f 0%, #1a3f62 58%, #204f76 100%);
+  color: #eaf7ff;
+}
+
+.progression-index-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.progression-index-head h3 {
+  margin: 0.32rem 0 0;
+  color: #f5fbff;
+  font-size: 1.34rem;
+}
+
+.progression-index-week-delta {
+  border-radius: 999px;
+  padding: 0.18rem 0.58rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.progression-index-week-delta.is-up {
+  border: 1px solid rgba(160, 247, 197, 0.56);
+  background: rgba(124, 229, 173, 0.17);
+  color: #ccf8de;
+}
+
+.progression-index-week-delta.is-down {
+  border: 1px solid rgba(255, 185, 185, 0.56);
+  background: rgba(255, 137, 137, 0.14);
+  color: #ffe0e0;
+}
+
+.progression-index-kpis {
+  margin-top: 0.56rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.46rem;
+}
+
+.progression-index-kpis > div {
+  border: 1px solid rgba(190, 223, 248, 0.42);
+  border-radius: 11px;
+  padding: 0.48rem 0.56rem;
+  background: rgba(242, 250, 255, 0.11);
+  display: grid;
+  gap: 0.08rem;
+}
+
+.progression-index-kpis span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #cde7fb;
+}
+
+.progression-index-kpis strong {
+  color: #f4fbff;
+  line-height: 1.35;
+}
+
+.progression-index-breakdown {
+  list-style: none;
+  margin: 0.58rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.42rem;
+}
+
+.progression-index-breakdown li {
+  border: 1px solid rgba(195, 227, 249, 0.42);
+  border-radius: 10px;
+  padding: 0.4rem 0.5rem;
+  background: rgba(231, 246, 255, 0.1);
+  display: grid;
+  gap: 0.08rem;
+}
+
+.progression-index-breakdown span {
+  font-size: 0.7rem;
+  color: #cfe9fd;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.progression-index-breakdown strong {
+  color: #f5fbff;
+  font-size: 0.9rem;
+}
+
+.home-progression-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: rgba(124, 194, 232, 0.48);
+  background:
+    radial-gradient(circle at 12% 15%, rgba(111, 223, 255, 0.18), transparent 42%),
+    radial-gradient(circle at 88% 82%, rgba(255, 196, 126, 0.18), transparent 42%),
+    linear-gradient(155deg, rgba(11, 34, 54, 0.98), rgba(16, 47, 75, 0.98));
+  box-shadow:
+    0 24px 42px rgba(3, 12, 24, 0.42),
+    0 0 0 1px rgba(152, 212, 244, 0.28) inset;
+}
+
+.home-progression-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, rgba(115, 231, 244, 0.08), rgba(255, 206, 138, 0.06));
+  z-index: 0;
+}
+
+.home-progression-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.home-progression-head h2 {
+  margin: 0;
+  color: #f2fbff;
+}
+
+.home-progression-delta {
+  border-radius: 999px;
+  padding: 0.16rem 0.52rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.home-progression-delta.is-up {
+  color: #cbf7de;
+  border: 1px solid rgba(162, 248, 201, 0.5);
+  background: rgba(124, 231, 174, 0.14);
+}
+
+.home-progression-delta.is-down {
+  color: #ffdcdc;
+  border: 1px solid rgba(255, 191, 191, 0.52);
+  background: rgba(255, 136, 136, 0.13);
+}
+
+.home-progression-main {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.46rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.home-progression-main strong {
+  color: #ffffff;
+  font-size: 1.45rem;
+  text-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.home-progression-main span {
+  color: #cde7fb;
+  font-weight: 600;
+}
+
+.home-progression-track {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.46rem;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(180, 224, 247, 0.42);
+  background: linear-gradient(180deg, rgba(9, 22, 33, 0.62), rgba(9, 22, 33, 0.42));
+  overflow: hidden;
+}
+
+.home-progression-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3be0d5, #46b2ff 55%, #ffbe6a 100%);
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.28);
+  transition: width 220ms ease;
+}
+
+.home-progression-card .page-subtitle {
+  position: relative;
+  z-index: 1;
+}
+
+.home-progression-mini-grid {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.35rem;
+}
+
+.home-progression-mini-grid span {
+  border: 1px solid rgba(191, 223, 246, 0.4);
+  border-radius: 9px;
+  padding: 0.34rem 0.42rem;
+  background: rgba(233, 247, 255, 0.1);
+  color: #deeffd;
+  font-size: 0.78rem;
 }
 
 .curve-gaming-kpis {
@@ -7147,6 +7396,71 @@ textarea::placeholder {
   font-weight: 600;
 }
 
+.coach-inline-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(114, 200, 196, 0.28);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(155deg, rgba(10, 22, 31, 0.94), rgba(8, 16, 24, 0.97)),
+    radial-gradient(circle at top right, rgba(255, 205, 124, 0.12), transparent 28%);
+  box-shadow: 0 16px 28px rgba(6, 13, 22, 0.18);
+}
+
+.coach-inline-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.coach-inline-panel-head h3 {
+  margin: 0.16rem 0 0;
+  color: #eef9ff;
+}
+
+.coach-inline-send-btn {
+  white-space: nowrap;
+}
+
+.coach-inline-stats,
+.coach-feedback-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.coach-inline-stat,
+.coach-feedback-status-card {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.72rem 0.8rem;
+  border-radius: 14px;
+  border: 1px solid rgba(114, 200, 196, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.coach-inline-stat span,
+.coach-feedback-status-card span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9fc2cc;
+}
+
+.coach-inline-stat strong,
+.coach-feedback-status-card strong {
+  color: #eef9ff;
+  font-size: 0.98rem;
+}
+
+.coach-inline-note {
+  margin: 0;
+  color: #bdd8df;
+  font-size: 0.92rem;
+}
+
 @media (max-width: 760px) {
   .coach-cta-row {
     flex-direction: column;
@@ -7172,7 +7486,21 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .coach-inline-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .coach-inline-send-btn {
+    width: 100%;
+  }
+
+  .coach-inline-stats,
   .coach-feedback-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-feedback-status-grid {
     grid-template-columns: 1fr;
   }
 }

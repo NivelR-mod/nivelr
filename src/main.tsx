@@ -77,7 +77,7 @@ import {
   saveGamificationState
 } from './gamification/storage';
 import { GamificationState } from './gamification/types';
-import { ensureMonthlyChallengeChoices, computeWeeklyStats } from './gamification/progression';
+import { ensureMonthlyChallengeChoices, computeWeeklyStats, refreshProgressionIndex } from './gamification/progression';
 import './index.css';
 
 interface ToastState {
@@ -501,7 +501,7 @@ function App(): JSX.Element {
         },
         state.sessions
       );
-      return withChallenges;
+      return refreshProgressionIndex(withChallenges, state.sessions, new Date(), false);
     });
   }, [state.sessions, gamificationState.userLevel.level]);
 
@@ -580,9 +580,23 @@ function App(): JSX.Element {
     if (!sessionUser || !cloudHydrationDone || hydratedUserId !== sessionUser.id) return;
     void syncCurrentUserProgressRemote({
       level: displayLevel,
-      xpTotal: displayXp
+      xpTotal: displayXp,
+      progressionIndex: gamificationState.progressionIndex.value,
+      progressionIndexLastUpdate: gamificationState.progressionIndex.lastUpdate,
+      progressionIndexWeekDelta: gamificationState.progressionIndex.weekDelta,
+      fitnessBase: gamificationState.progressionIndex.fitnessBase
     });
-  }, [sessionUser?.id, displayLevel, displayXp, cloudHydrationDone, hydratedUserId]);
+  }, [
+    sessionUser?.id,
+    displayLevel,
+    displayXp,
+    gamificationState.progressionIndex.value,
+    gamificationState.progressionIndex.lastUpdate,
+    gamificationState.progressionIndex.weekDelta,
+    gamificationState.progressionIndex.fitnessBase,
+    cloudHydrationDone,
+    hydratedUserId
+  ]);
 
   useEffect(() => {
     if (!sessionUser || !cloudHydrationDone || hydratedUserId !== sessionUser.id || !cloudSaveEnabled) return;
@@ -600,10 +614,13 @@ function App(): JSX.Element {
           ? prev
           : { ...prev, missionWeekKey: currentWeek, weeklyClaimedMissions: [] }
       );
+      if (GAMIFICATION_V1_ENABLED) {
+        setGamificationState((prev) => refreshProgressionIndex(prev, state.sessions, new Date(), false));
+      }
     }, 60000);
 
     return () => window.clearInterval(id);
-  }, []);
+  }, [state.sessions]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -1238,7 +1255,7 @@ function App(): JSX.Element {
                 </span>
               </NavLink>
               <NavLink to="/coach">Coach</NavLink>
-              <NavLink to="/guide-xp">Guide XP</NavLink>
+              <NavLink to="/guide">Guide</NavLink>
             </nav>
 
           </aside>
@@ -1338,7 +1355,7 @@ function App(): JSX.Element {
               </NavLink>
               <NavLink to="/badges">Badges</NavLink>
               <NavLink to="/coach">Coach</NavLink>
-              <NavLink to="/guide-xp">Guide XP</NavLink>
+              <NavLink to="/guide">Guide</NavLink>
             </nav>
           ) : null}
           <main>
@@ -1519,8 +1536,12 @@ function App(): JSX.Element {
                 )}
               />
               <Route
-                path="/guide-xp"
+                path="/guide"
                 element={gateWithRunnerAssessment(<XpGuide state={state} gamificationState={gamificationState} />)}
+              />
+              <Route
+                path="/guide-xp"
+                element={<Navigate to="/guide" replace />}
               />
               <Route
                 path="/profil-coureur"
@@ -1694,7 +1715,7 @@ function App(): JSX.Element {
                 path="/coach"
                 element={gateWithRunnerAssessment(
                   sessionUser ? (
-                    <Coach />
+                    <Coach sessions={state.sessions} />
                   ) : (
                     renderAuthLockedPage('Coach', 'Connecte-toi pour accéder à ton programme personnalisé.')
                   )

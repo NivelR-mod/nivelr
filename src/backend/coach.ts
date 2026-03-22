@@ -1,6 +1,8 @@
 import { getCurrentSessionUser, isRemoteAuthEnabledLocal } from './localAuth';
 import { sendContactEmail } from './contactEmail';
 import { supabase } from './supabaseClient';
+import { Session } from '../types/models';
+import { getWeekKeyFromDate } from '../storage/localStore';
 
 export interface CoachProgramSummary {
   id: string;
@@ -26,6 +28,17 @@ export interface CoachHubData {
   } | null;
 }
 
+export interface CoachSessionAutoSummary {
+  id: string;
+  title: string;
+  dateLabel: string;
+  distanceLabel: string;
+  durationLabel: string;
+  paceLabel: string;
+  rpe: number;
+  fatigue: number;
+}
+
 type CoachProgramRow = {
   id: string;
   week_number: number;
@@ -44,6 +57,22 @@ type CoachFeedbackRow = {
 };
 
 const DEFAULT_STORAGE_BUCKET = (import.meta.env.VITE_COACH_STORAGE_BUCKET ?? 'coach-programs').trim();
+
+function formatDurationLabel(durationMin: number): string {
+  const rounded = Math.max(0, Math.round(durationMin));
+  const hours = Math.floor(rounded / 60);
+  const minutes = rounded % 60;
+  if (hours <= 0) return `${minutes} min`;
+  return `${hours}h${String(minutes).padStart(2, '0')}`;
+}
+
+function formatPaceLabel(distanceKm: number | undefined, durationMin: number): string {
+  if (!distanceKm || distanceKm <= 0) return '--';
+  const pace = durationMin / distanceKm;
+  const mins = Math.floor(pace);
+  const secs = Math.round((pace - mins) * 60);
+  return `${mins}:${String(secs).padStart(2, '0')}/km`;
+}
 
 function normalizeBucketName(input: string): string {
   const raw = (input ?? '').trim();
@@ -74,6 +103,82 @@ function canUseCoachCloud(): boolean {
 function getSessionUserId(): string | null {
   const user = getCurrentSessionUser();
   return user?.id ?? null;
+}
+
+export function getCoachSubmissionDeadline(now: Date = new Date()): Date {
+  const deadline = new Date(now);
+  const day = deadline.getDay();
+  const deltaToSunday = day === 0 ? 0 : 7 - day;
+  deadline.setDate(deadline.getDate() + deltaToSunday);
+  deadline.setHours(18, 0, 0, 0);
+  return deadline;
+}
+
+export function getCurrentWeekCoachSessions(sessions: Session[], now: Date = new Date()): Session[] {
+  const currentWeekKey = getWeekKeyFromDate(now);
+  return sessions
+    .filter((session) => getWeekKeyFromDate(new Date(session.createdAt)) === currentWeekKey)
+    .slice()
+    .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+}
+
+export function getCoachSessionSummaries(sessions: Session[]): CoachSessionAutoSummary[] {
+  return sessions.map((session, index) => ({
+    id: session.id,
+    title: `Séance ${index + 1} · ${session.subtype}`,
+    dateLabel: new Date(session.createdAt).toLocaleDateString('fr-FR', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit'
+    }),
+    distanceLabel: typeof session.distanceKm === 'number' ? `${session.distanceKm.toFixed(1)} km` : '--',
+    durationLabel: formatDurationLabel(session.durationMin),
+    paceLabel: formatPaceLabel(session.distanceKm, session.durationMin),
+    rpe: session.feelings.rpe,
+    fatigue: session.feelings.fatigue
+  }));
+}
+
+export function buildCoachFeedbackTextFromSessions(
+  weekNumber: number,
+  sessions: Session[],
+  now: Date = new Date()
+): string {
+  const summaries = getCoachSessionSummaries(sessions);
+  const totalDistance = sessions.reduce((sum, session) => sum + (session.distanceKm ?? 0), 0);
+  const totalDuration = sessions.reduce((sum, session) => sum + session.durationMin, 0);
+  const avgRpe = sessions.length
+    ? sessions.reduce((sum, session) => sum + session.feelings.rpe, 0) / sessions.length
+    : 0;
+  const avgFatigue = sessions.length
+    ? sessions.reduce((sum, session) => sum + session.feelings.fatigue, 0) / sessions.length
+    : 0;
+
+  return [
+    '=== RETOUR DE SEMAINE ===',
+    ...summaries.flatMap((session) => [
+      '',
+      `--- ${session.title} ---`,
+      `Date: ${session.dateLabel}`,
+      `Distances: ${session.distanceLabel}`,
+      `Temps: ${session.durationLabel}`,
+      `Rythme (min/km): ${session.paceLabel}`,
+      `RPE moyen: ${session.rpe}`,
+      `Fatigue (1-5): ${session.fatigue}`,
+      'Note libre séance: Retour généré automatiquement depuis la séance enregistrée.'
+    ]),
+    '',
+    '=== RETOUR GÉNÉRAL ===',
+    `Semaine: ${weekNumber}`,
+    `Séances réalisées: ${sessions.length}`,
+    `Distance totale: ${totalDistance.toFixed(1)} km`,
+    `Temps total: ${formatDurationLabel(totalDuration)}`,
+    `RPE moyen semaine: ${avgRpe.toFixed(1)}`,
+    `Fatigue moyenne semaine: ${avgFatigue.toFixed(1)}/5`,
+    'Sensations générales: Retour automatique basé sur les séances enregistrées dans l’application.',
+    'Notes libres sur la semaine: Aucune note libre.',
+    `Généré le: ${now.toLocaleString('fr-FR')}`
+  ].join('\n');
 }
 
 function mapProgramRow(row: CoachProgramRow): CoachProgramSummary {

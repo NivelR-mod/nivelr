@@ -1,5 +1,13 @@
 import { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  buildCoachFeedbackTextFromSessions,
+  CoachHubData,
+  getCoachHubData,
+  getCoachSubmissionDeadline,
+  getCurrentWeekCoachSessions,
+  submitCoachFeedback
+} from '../../backend/coach';
 import { computeSessionXp, createSession } from '../../domain/sessions';
 import { getWeekKeyFromDate } from '../../storage/localStore';
 import { Session, SessionInput } from '../../types/models';
@@ -379,6 +387,12 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
   const [intervalBlocks, setIntervalBlocks] = useState<IntervalBlock[]>([createIntervalBlock()]);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [maxReachedStep, setMaxReachedStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [coachHubData, setCoachHubData] = useState<CoachHubData | null>(null);
+  const [coachLoading, setCoachLoading] = useState(true);
+  const [coachSending, setCoachSending] = useState(false);
+  const [coachError, setCoachError] = useState('');
+  const [coachMessage, setCoachMessage] = useState('');
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const setField = (field: keyof FormState, value: string): void => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -576,6 +590,89 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
     return computeSessionXp(input);
   }, [effectiveDistanceKm, effectiveDurationMin, form.kind, form.rpe]);
 
+  useEffect(() => {
+    let active = true;
+    const loadCoachHub = async (): Promise<void> => {
+      setCoachLoading(true);
+      const result = await getCoachHubData();
+      if (!active) return;
+      if (!result.ok || !result.data) {
+        setCoachHubData(null);
+        setCoachLoading(false);
+        return;
+      }
+      setCoachHubData(result.data);
+      setCoachLoading(false);
+    };
+    void loadCoachHub();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const coachDeadline = useMemo(() => getCoachSubmissionDeadline(new Date(nowTick)), [nowTick]);
+  const coachWeekSessions = useMemo(
+    () => getCurrentWeekCoachSessions(existingSessions, new Date(nowTick)),
+    [existingSessions, nowTick]
+  );
+  const coachCanSend = Boolean(
+    coachHubData?.intakeCompleted && coachHubData.activeProgram && coachWeekSessions.length > 0
+  );
+  const coachShouldAutoSend = Boolean(
+    coachHubData?.intakeCompleted &&
+      coachHubData.activeProgram &&
+      !coachHubData.feedbackAlreadySent &&
+      coachWeekSessions.length > 0 &&
+      Date.now() >= coachDeadline.getTime()
+  );
+
+  const refreshCoachHub = async (): Promise<void> => {
+    const result = await getCoachHubData();
+    if (!result.ok || !result.data) {
+      setCoachHubData(null);
+      return;
+    }
+    setCoachHubData(result.data);
+  };
+
+  const sendCoachWeekNow = async (mode: 'manual' | 'auto'): Promise<void> => {
+    if (!coachHubData?.activeProgram || !coachCanSend) return;
+    setCoachError('');
+    setCoachMessage('');
+    setCoachSending(true);
+    const result = await submitCoachFeedback({
+      weekNumber: coachHubData.activeProgram.weekNumber,
+      feedbackText: buildCoachFeedbackTextFromSessions(
+        coachHubData.activeProgram.weekNumber,
+        coachWeekSessions,
+        new Date()
+      ),
+      readyForNextWeek: true
+    });
+    setCoachSending(false);
+    if (!result.ok) {
+      setCoachError(result.error ?? "Impossible d'envoyer le retour au coach.");
+      return;
+    }
+    setCoachMessage(
+      result.warning ??
+        (mode === 'auto'
+          ? 'Retour de semaine envoyé automatiquement au coach.'
+          : 'Retour de semaine envoyé au coach.')
+    );
+    await refreshCoachHub();
+  };
+
+  useEffect(() => {
+    if (!coachShouldAutoSend || coachSending) return;
+    void sendCoachWeekNow('auto');
+  }, [coachShouldAutoSend, coachSending]);
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const validationError = validate();
@@ -700,6 +797,56 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
             </p>
           </details>
         </article>
+
+        {coachHubData?.intakeCompleted && coachHubData.activeProgram ? (
+          <article className="coach-inline-panel">
+            <div className="coach-inline-panel-head">
+              <div>
+                <p className="recommendation-kicker">Suivi coach</p>
+                <h3>Cette semaine partira automatiquement dimanche à 18h</h3>
+              </div>
+              {!coachHubData.feedbackAlreadySent ? (
+                <button
+                  type="button"
+                  className="coach-inline-send-btn"
+                  disabled={!coachCanSend || coachSending}
+                  onClick={() => void sendCoachWeekNow('manual')}
+                >
+                  {coachSending ? 'Envoi...' : 'Envoyer avant la deadline'}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="coach-inline-stats">
+              <article className="coach-inline-stat">
+                <span>Deadline</span>
+                <strong>
+                  {coachDeadline.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: 'long'
+                  })}{' '}
+                  à 18:00
+                </strong>
+              </article>
+              <article className="coach-inline-stat">
+                <span>Statut</span>
+                <strong>{coachHubData.feedbackAlreadySent ? 'Déjà envoyé' : 'Envoi auto prévu'}</strong>
+              </article>
+              <article className="coach-inline-stat">
+                <span>Séances cette semaine</span>
+                <strong>{coachWeekSessions.length}</strong>
+              </article>
+            </div>
+
+            <p className="coach-inline-note">
+              Tes séances enregistrées ici servent directement au retour coach. Aucun formulaire doublon à remplir.
+            </p>
+            {coachLoading ? <p className="page-subtitle">Chargement du suivi coach...</p> : null}
+            {coachError ? <p className="error">{coachError}</p> : null}
+            {coachMessage ? <p className="inline-info">{coachMessage}</p> : null}
+          </article>
+        ) : null}
 
         <fieldset className="form-group required-group">
           <legend>Parcours guidé</legend>
