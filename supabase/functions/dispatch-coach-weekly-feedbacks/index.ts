@@ -122,6 +122,14 @@ function getParisClock(now = new Date()): {
   };
 }
 
+function getCoachFeedbackWeekKeyFromParisClock(clock: ReturnType<typeof getParisClock>): string {
+  const target = new Date(clock.dateForWeekKey);
+  if (clock.weekday !== 'Sun') {
+    target.setUTCDate(target.getUTCDate() - 7);
+  }
+  return getWeekKeyFromDate(target);
+}
+
 function isDeliverySent(status: string | null | undefined): boolean {
   if (!status) return true;
   return status === 'SENT';
@@ -263,7 +271,7 @@ Deno.serve(async (request) => {
     auth: { autoRefreshToken: false, persistSession: false }
   });
   const resend = new Resend(resendApiKey);
-  const currentWeekKey = getWeekKeyFromDate(dateForWeekKey);
+  const feedbackWeekKey = getCoachFeedbackWeekKeyFromParisClock({ weekday, hour, minute, dateForWeekKey });
 
   const [programsRes, feedbacksRes, statesRes, profilesRes, intakesRes] = await Promise.all([
     supabase.from('coach_programs').select('id,user_id,week_number,status').eq('status', 'PUBLISHED').order('week_number', { ascending: true }),
@@ -310,7 +318,7 @@ Deno.serve(async (request) => {
     }
 
     const state = stateByUser.get(userId)?.state_json;
-    const currentWeekSessions = getCurrentWeekSessions(state?.sessions, currentWeekKey);
+    const currentWeekSessions = getCurrentWeekSessions(state?.sessions, feedbackWeekKey);
     if (!currentWeekSessions.length) {
       results.push({ userId, weekNumber: program.week_number, status: 'skipped', reason: 'no_sessions' });
       continue;
@@ -421,7 +429,7 @@ Deno.serve(async (request) => {
   return json({
     ok: true,
     force,
-    currentWeekKey,
+    currentWeekKey: feedbackWeekKey,
     processed: results.length,
     results
   });

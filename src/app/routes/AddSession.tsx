@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   buildCoachFeedbackTextFromSessions,
   CoachHubData,
+  getCoachFeedbackWeekKey,
   getCoachHubData,
   getCoachSubmissionDeadline,
   getCurrentWeekCoachSessions,
@@ -616,6 +617,7 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
   }, []);
 
   const coachDeadline = useMemo(() => getCoachSubmissionDeadline(new Date(nowTick)), [nowTick]);
+  const coachFeedbackWeekKey = useMemo(() => getCoachFeedbackWeekKey(new Date(nowTick)), [nowTick]);
   const coachWeekSessions = useMemo(
     () => getCurrentWeekCoachSessions(existingSessions, new Date(nowTick)),
     [existingSessions, nowTick]
@@ -834,7 +836,7 @@ export default function AddSession({ onAddSession, existingSessions = [] }: AddS
                 <strong>{coachHubData.feedbackAlreadySent ? 'Déjà envoyé' : 'Envoi auto prévu'}</strong>
               </article>
               <article className="coach-inline-stat">
-                <span>Séances cette semaine</span>
+                <span>Séances {coachFeedbackWeekKey}</span>
                 <strong>{coachWeekSessions.length}</strong>
               </article>
             </div>

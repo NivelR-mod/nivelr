@@ -4,6 +4,7 @@ import { getCurrentSessionUser } from '../../backend/localAuth';
 import {
   buildCoachFeedbackTextFromSessions,
   CoachHubData,
+  getCoachFeedbackWeekKey,
   getCoachHubData,
   getCoachSessionSummaries,
   getCoachSubmissionDeadline,
@@ -62,6 +63,7 @@ export default function Coach({ sessions }: CoachProps): JSX.Element {
   }, []);
 
   const deadline = useMemo(() => getCoachSubmissionDeadline(new Date(nowTick)), [nowTick]);
+  const feedbackWeekKey = useMemo(() => getCoachFeedbackWeekKey(new Date(nowTick)), [nowTick]);
   const weekSessions = useMemo(() => getCurrentWeekCoachSessions(sessions, new Date(nowTick)), [sessions, nowTick]);
   const sessionSummaries = useMemo(() => getCoachSessionSummaries(weekSessions), [weekSessions]);
 
@@ -204,7 +206,7 @@ export default function Coach({ sessions }: CoachProps): JSX.Element {
               <strong>{hubData.feedbackAlreadySent ? 'Retour déjà envoyé' : 'Envoi auto prévu'}</strong>
             </article>
             <article className="coach-feedback-status-card">
-              <span>Séances de la semaine</span>
+              <span>Séances {feedbackWeekKey}</span>
               <strong>{weekSessions.length}</strong>
             </article>
           </div>
