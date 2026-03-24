@@ -54,6 +54,7 @@ type CoachFeedbackRow = {
   feedback_text: string;
   ready_for_next_week: boolean;
   submitted_at: string;
+  delivery_status?: 'PENDING' | 'SENT' | 'ERROR' | null;
 };
 
 const DEFAULT_STORAGE_BUCKET = (import.meta.env.VITE_COACH_STORAGE_BUCKET ?? 'coach-programs').trim();
@@ -260,7 +261,7 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
     .order('week_number', { ascending: true });
   const feedbackPromise = supabase!
     .from('coach_feedbacks')
-    .select('week_number, feedback_text, ready_for_next_week, submitted_at')
+    .select('week_number, feedback_text, ready_for_next_week, submitted_at, delivery_status')
     .eq('user_id', userId);
 
   const [intakeRes, programsRes, feedbackRes] = await Promise.all([intakePromise, programsPromise, feedbackPromise]);
@@ -270,8 +271,12 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
 
   const programs = ((programsRes.data ?? []) as CoachProgramRow[]).map(mapProgramRow);
   const feedbackRows = (feedbackRes.data ?? []) as CoachFeedbackRow[];
-  const feedbackWeeks = new Set(feedbackRows.map((row) => row.week_number));
-  const firstPendingProgram = programs.find((program) => !feedbackWeeks.has(program.weekNumber));
+  const sentFeedbackWeeks = new Set(
+    feedbackRows
+      .filter((row) => !row.delivery_status || row.delivery_status === 'SENT')
+      .map((row) => row.week_number)
+  );
+  const firstPendingProgram = programs.find((program) => !sentFeedbackWeeks.has(program.weekNumber));
   const latestProgram = programs.length ? programs[programs.length - 1] : null;
   const activeProgram = firstPendingProgram ?? latestProgram ?? null;
   const activeFeedbackRow = activeProgram
@@ -285,7 +290,11 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
       intakeCompletedAt: intakeRes.data?.completed_at ?? null,
       publishedPrograms: programs,
       activeProgram,
-      feedbackAlreadySent: activeProgram ? feedbackWeeks.has(activeProgram.weekNumber) : false,
+      feedbackAlreadySent: activeProgram
+        ? Boolean(
+            activeFeedbackRow && (!activeFeedbackRow.delivery_status || activeFeedbackRow.delivery_status === 'SENT')
+          )
+        : false,
       activeFeedback: activeFeedbackRow
         ? {
             weekNumber: activeFeedbackRow.week_number,
@@ -387,7 +396,11 @@ export async function submitCoachFeedback(input: {
     feedback_text: trimmedFeedback,
     ready_for_next_week: input.readyForNextWeek,
     submitted_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    delivery_status: 'PENDING',
+    delivery_mode: 'MANUAL',
+    emailed_at: null,
+    delivery_error: null
   };
 
   const { error } = await supabase!.from('coach_feedbacks').upsert(payload, {
@@ -423,14 +436,45 @@ export async function submitCoachFeedback(input: {
       message: coachMailMessage
     });
     if (fallback.ok) {
+      await supabase!
+        .from('coach_feedbacks')
+        .update({
+          delivery_status: 'SENT',
+          emailed_at: new Date().toISOString(),
+          delivery_error: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('week_number', input.weekNumber);
       return { ok: true };
     }
+    await supabase!
+      .from('coach_feedbacks')
+      .update({
+        delivery_status: 'ERROR',
+        emailed_at: null,
+        delivery_error: fallback.error ?? notifyResult.error?.message ?? 'mail_failed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('week_number', input.weekNumber);
     return {
       ok: true,
       warning:
         'Retour enregistré, mais l’email coach n’a pas pu être envoyé. Vérifie les secrets de la function send-contact-email.'
     };
   }
+
+  await supabase!
+    .from('coach_feedbacks')
+    .update({
+      delivery_status: 'SENT',
+      emailed_at: new Date().toISOString(),
+      delivery_error: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .eq('week_number', input.weekNumber);
 
   return { ok: true };
 }

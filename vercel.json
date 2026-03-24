@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/coach-weekly-feedbacks",
+      "schedule": "0 20 * * 0"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

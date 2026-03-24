@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.delete-user-account]
 verify_jwt = false
+
+[functions.dispatch-coach-weekly-feedbacks]
+verify_jwt = false
