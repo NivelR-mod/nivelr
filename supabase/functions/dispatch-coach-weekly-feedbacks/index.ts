@@ -123,11 +123,7 @@ function getParisClock(now = new Date()): {
 }
 
 function getCoachFeedbackWeekKeyFromParisClock(clock: ReturnType<typeof getParisClock>): string {
-  const target = new Date(clock.dateForWeekKey);
-  if (clock.weekday !== 'Sun') {
-    target.setUTCDate(target.getUTCDate() - 7);
-  }
-  return getWeekKeyFromDate(target);
+  return getWeekKeyFromDate(clock.dateForWeekKey);
 }
 
 function isDeliverySent(status: string | null | undefined): boolean {

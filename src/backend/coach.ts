@@ -116,11 +116,7 @@ export function getCoachSubmissionDeadline(now: Date = new Date()): Date {
 }
 
 export function getCoachFeedbackWeekKey(now: Date = new Date()): string {
-  const target = new Date(now);
-  if (target.getDay() !== 0) {
-    target.setDate(target.getDate() - 7);
-  }
-  return getWeekKeyFromDate(target);
+  return getWeekKeyFromDate(now);
 }
 
 export function getCurrentWeekCoachSessions(sessions: Session[], now: Date = new Date()): Session[] {
