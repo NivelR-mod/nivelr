@@ -23,6 +23,7 @@ import {
   updateUserContactPreferencesLocal,
   updateProfileLocal
 } from '../../backend/localAuth';
+import { uploadCoachProgramAdmin } from '../../backend/coach';
 import { getLastRemoteProgressSyncStatus, listRemoteUserProgress } from '../../backend/remoteProgress';
 import { listRemoteAppStatesForAdmin } from '../../backend/remoteAppState';
 import { RemoteUserProgressEntry } from '../../backend/types';
@@ -60,6 +61,11 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
   const [progressRows, setProgressRows] = useState<RemoteUserProgressEntry[]>([]);
   const [progressLoading, setProgressLoading] = useState(false);
   const [lastSyncStatus, setLastSyncStatus] = useState(getLastRemoteProgressSyncStatus());
+  const [coachProgramUserId, setCoachProgramUserId] = useState('');
+  const [coachProgramWeek, setCoachProgramWeek] = useState('1');
+  const [coachProgramFile, setCoachProgramFile] = useState<File | null>(null);
+  const [coachProgramLoading, setCoachProgramLoading] = useState(false);
+  const [coachProgramMessage, setCoachProgramMessage] = useState('');
   const [error, setError] = useState('');
   const [isIdentityEditing, setIsIdentityEditing] = useState(false);
   const [isSecurityEditing, setIsSecurityEditing] = useState(false);
@@ -271,6 +277,39 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
     link.click();
     URL.revokeObjectURL(url);
     setAdminMessage(`Sauvegarde cloud exportée (${result.rows.length} utilisateur(s)).`);
+  };
+
+  const onPublishCoachProgram = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    setError('');
+    setCoachProgramMessage('');
+
+    if (!coachProgramUserId.trim()) {
+      setError('Renseigne l’UUID utilisateur.');
+      return;
+    }
+    if (!coachProgramFile) {
+      setError('Ajoute un PDF avant publication.');
+      return;
+    }
+
+    setCoachProgramLoading(true);
+    const result = await uploadCoachProgramAdmin({
+      userId: coachProgramUserId.trim(),
+      weekNumber: Number(coachProgramWeek),
+      file: coachProgramFile
+    });
+    setCoachProgramLoading(false);
+
+    if (!result.ok) {
+      setError(result.error ?? 'Publication impossible.');
+      return;
+    }
+
+    setCoachProgramMessage(`Programme semaine ${coachProgramWeek} publié pour ${coachProgramUserId.trim()}.`);
+    setCoachProgramFile(null);
+    const input = document.getElementById('coach-program-file') as HTMLInputElement | null;
+    if (input) input.value = '';
   };
 
   const deleteReasonOptions = [
@@ -619,6 +658,52 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
             {adminMessage ? <p className="inline-info">{adminMessage}</p> : null}
             {remoteAuthEnabled ? (
               <>
+                <form className="form auth-form" onSubmit={(event) => void onPublishCoachProgram(event)}>
+                  <h3>Publier un programme coach</h3>
+                  <p className="page-subtitle">
+                    Upload du PDF + publication en base automatique. Plus besoin de SQL manuel.
+                  </p>
+                  <label>
+                    UUID utilisateur
+                    <input
+                      type="text"
+                      value={coachProgramUserId}
+                      onChange={(event) => setCoachProgramUserId(event.target.value)}
+                      placeholder="Ex: 759f4c42-a555-4a38-a4c2-8a21cceabdd6"
+                      disabled={coachProgramLoading}
+                    />
+                  </label>
+                  <label>
+                    Semaine
+                    <select
+                      value={coachProgramWeek}
+                      onChange={(event) => setCoachProgramWeek(event.target.value)}
+                      disabled={coachProgramLoading}
+                    >
+                      {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((week) => (
+                        <option key={week} value={week}>
+                          Semaine {week}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    PDF du programme
+                    <input
+                      id="coach-program-file"
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(event) => setCoachProgramFile(event.target.files?.[0] ?? null)}
+                      disabled={coachProgramLoading}
+                    />
+                  </label>
+                  {coachProgramMessage ? <p className="inline-info">{coachProgramMessage}</p> : null}
+                  {error ? <p className="error">{error}</p> : null}
+                  <button type="submit" disabled={coachProgramLoading}>
+                    {coachProgramLoading ? 'Publication...' : 'Publier le programme'}
+                  </button>
+                </form>
+
                 <div className="goal-actions">
                   <button type="button" onClick={() => void onLoadRemoteProgress()}>
                     Charger progression utilisateurs

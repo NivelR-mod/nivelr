@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.dispatch-coach-weekly-feedbacks]
 verify_jwt = false
+
+[functions.upload-coach-program]
+verify_jwt = false

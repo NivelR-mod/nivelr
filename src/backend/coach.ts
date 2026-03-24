@@ -482,3 +482,66 @@ export async function submitCoachFeedback(input: {
 
   return { ok: true };
 }
+
+export async function uploadCoachProgramAdmin(input: {
+  userId: string;
+  weekNumber: number;
+  file: File;
+}): Promise<{ ok: boolean; error?: string; storagePath?: string }> {
+  if (!canUseCoachCloud()) {
+    return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
+  }
+
+  const user = getCurrentSessionUser();
+  if (!user) {
+    return { ok: false, error: 'Connecte-toi pour publier un programme.' };
+  }
+
+  const { data: sessionData } = await supabase!.auth.getSession();
+  const accessToken = sessionData.session?.access_token?.trim() ?? '';
+  if (!accessToken) {
+    return { ok: false, error: 'Session expirée. Reconnecte-toi puis réessaie.' };
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  if (!supabaseUrl) {
+    return { ok: false, error: 'Configuration Supabase manquante.' };
+  }
+
+  const formData = new FormData();
+  formData.append('userId', input.userId.trim());
+  formData.append('weekNumber', String(input.weekNumber));
+  formData.append('file', input.file);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/upload-coach-program`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: formData
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      detail?: string;
+      storagePath?: string;
+    };
+    if (!response.ok || !payload.ok) {
+      return {
+        ok: false,
+        error: [payload.error, payload.detail].filter(Boolean).join(': ') || 'Publication impossible.'
+      };
+    }
+    return {
+      ok: true,
+      storagePath: payload.storagePath
+    };
+  } catch {
+    return {
+      ok: false,
+      error: 'Publication impossible pour le moment.'
+    };
+  }
+}
