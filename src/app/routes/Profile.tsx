@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import {
-  formatRunnerArchetype,
+  formatRunnerFocus,
   formatRunnerLevel,
-  getRunnerArchetypeDescription
+  getRunnerProfileWhyLines
 } from '../../domain/runnerProfile';
 import {
   canUseModoForCurrentSession,
   getCurrentSessionUser,
-  getSidebarStatsScopeLocal,
   getUserContactPreferencesLocal,
   getUserSubscriptionLocal,
   isModoEnabledLocal,
@@ -17,13 +16,11 @@ import {
   listMarketingContactsLocal,
   deleteCurrentAccountLocal,
   signOutLocal,
-  SidebarStatsScope,
-  setSidebarStatsScopeLocal,
   updateAccountSecurityLocal,
   updateUserContactPreferencesLocal,
   updateProfileLocal
 } from '../../backend/localAuth';
-import { uploadCoachProgramAdmin } from '../../backend/coach';
+import { forceCoachFeedbackAdmin, uploadCoachProgramAdmin } from '../../backend/coach';
 import { getLastRemoteProgressSyncStatus, listRemoteUserProgress } from '../../backend/remoteProgress';
 import { listRemoteAppStatesForAdmin } from '../../backend/remoteAppState';
 import { RemoteUserProgressEntry } from '../../backend/types';
@@ -51,7 +48,6 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
   const [profileMessage, setProfileMessage] = useState('');
   const [securityMessage, setSecurityMessage] = useState('');
   const [contactMessage, setContactMessage] = useState('');
-  const [sidebarMessage, setSidebarMessage] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteReasonCategory, setDeleteReasonCategory] = useState('');
@@ -66,13 +62,15 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
   const [coachProgramFile, setCoachProgramFile] = useState<File | null>(null);
   const [coachProgramLoading, setCoachProgramLoading] = useState(false);
   const [coachProgramMessage, setCoachProgramMessage] = useState('');
+  const [coachProgramError, setCoachProgramError] = useState('');
+  const [coachForceUserId, setCoachForceUserId] = useState('');
+  const [coachForceWeekKey, setCoachForceWeekKey] = useState('2026-W10');
+  const [coachForceLoading, setCoachForceLoading] = useState(false);
+  const [coachForceMessage, setCoachForceMessage] = useState('');
+  const [coachForceError, setCoachForceError] = useState('');
   const [error, setError] = useState('');
   const [isIdentityEditing, setIsIdentityEditing] = useState(false);
   const [isSecurityEditing, setIsSecurityEditing] = useState(false);
-  const [sidebarScope, setSidebarScope] = useState<SidebarStatsScope>(
-    session ? getSidebarStatsScopeLocal(session.id) : 'WEEK'
-  );
-
   const subscriptionLabelMap: Record<string, string> = {
     FREE_S1: 'Saison 1 Gratuite',
     PREMIUM: 'Premium',
@@ -113,7 +111,21 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
     new Date(session.createdAt)
   );
   const runnerLevelLabel = runnerAssessment ? formatRunnerLevel(runnerAssessment.result.level) : 'À déterminer';
-  const runnerArchetypeLabel = runnerAssessment ? formatRunnerArchetype(runnerAssessment.result.archetype) : 'Inconnu';
+  const runnerFocusLabel = runnerAssessment ? formatRunnerFocus(runnerAssessment.result.focus) : 'À déterminer';
+  const runnerProfileLead = (() => {
+    if (!runnerAssessment) return 'Ton profil du moment sera visible ici après le test.';
+    const focus = runnerAssessment.result.focus;
+    if (focus === 'ROUTINE') return 'Tu progresses surtout grâce à la régularité.';
+    if (focus === 'PROGRESSION') return 'Tu avances mieux avec un cadre structuré.';
+    if (focus === 'PERFORMANCE') return 'Ton moteur principal est la performance.';
+    if (focus === 'SANTE') return 'Ton équilibre passe par une pratique durable.';
+    return 'La variété et le plaisir jouent un rôle fort dans ta progression.';
+  })();
+  const runnerProfileStrength = (() => {
+    if (!runnerAssessment) return 'Point fort à déterminer';
+    const whyLines = getRunnerProfileWhyLines(runnerAssessment.answers);
+    return whyLines[0] ?? 'Point fort en cours d’analyse.';
+  })();
   const maskEmail = (email: string): string => {
     const [localRaw, domainRaw] = email.trim().toLowerCase().split('@');
     if (!localRaw || !domainRaw) return '***@***.***';
@@ -198,19 +210,6 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
     );
   };
 
-  const onSidebarSave = (event: React.FormEvent<HTMLFormElement>): void => {
-    event.preventDefault();
-    setError('');
-    setSidebarMessage('');
-    const result = setSidebarStatsScopeLocal(session.id, sidebarScope);
-    if (!result.ok) {
-      setError(result.error ?? 'Enregistrement impossible.');
-      return;
-    }
-    const label = sidebarScope === 'WEEK' ? 'hebdomadaire' : sidebarScope === 'MONTH' ? 'mensuelle' : 'totale';
-    setSidebarMessage(`Vue sidebar enregistrée: ${label}.`);
-  };
-
   const onDownloadMarketingCsv = (): void => {
     setAdminMessage('');
     const csv = buildMarketingCsv();
@@ -257,6 +256,54 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
     );
   };
 
+  const onForceCoachFeedback = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    setCoachForceMessage('');
+    setCoachForceError('');
+
+    const userId = coachForceUserId.trim();
+    const feedbackWeekKey = coachForceWeekKey.trim().toUpperCase();
+    if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+      setCoachForceError("UUID utilisateur invalide.");
+      return;
+    }
+    if (!/^\d{4}-W\d{2}$/.test(feedbackWeekKey)) {
+      setCoachForceError('Semaine ISO invalide. Exemple: 2026-W10');
+      return;
+    }
+
+    setCoachForceLoading(true);
+    const result = await forceCoachFeedbackAdmin({ userId, feedbackWeekKey });
+    setCoachForceLoading(false);
+    if (!result.ok) {
+      setCoachForceError(result.error ?? "Impossible de forcer l'envoi.");
+      return;
+    }
+    const status = String(result.result?.status ?? '').trim();
+    const reason = String(result.result?.reason ?? '').trim();
+    if ((result.processed ?? 0) <= 0 || !status) {
+      setCoachForceMessage(
+        `Aucun envoi déclenché pour ${feedbackWeekKey}. Vérifie qu'il existe des séances cette semaine-là et qu'un feedback n'a pas déjà été envoyé.`
+      );
+      return;
+    }
+    if (status === 'sent') {
+      setCoachForceMessage(`Retour envoyé pour ${feedbackWeekKey}.`);
+      return;
+    }
+    if (status === 'skipped') {
+      setCoachForceMessage(
+        `Aucun mail envoyé pour ${feedbackWeekKey} : ${reason || 'condition non remplie'}.`
+      );
+      return;
+    }
+    if (status === 'error') {
+      setCoachForceError(`Échec pour ${feedbackWeekKey} : ${reason || 'erreur inconnue'}.`);
+      return;
+    }
+    setCoachForceMessage(`Résultat ${status} pour ${feedbackWeekKey}.`);
+  };
+
   const onExportCloudSafetyBackup = async (): Promise<void> => {
     setAdminMessage('');
     const result = await listRemoteAppStatesForAdmin(2000);
@@ -282,14 +329,16 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
   const onPublishCoachProgram = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setError('');
+    setAdminMessage('');
     setCoachProgramMessage('');
+    setCoachProgramError('');
 
     if (!coachProgramUserId.trim()) {
-      setError('Renseigne l’UUID utilisateur.');
+      setCoachProgramError('Renseigne l’UUID utilisateur.');
       return;
     }
     if (!coachProgramFile) {
-      setError('Ajoute un PDF avant publication.');
+      setCoachProgramError('Ajoute un PDF avant publication.');
       return;
     }
 
@@ -302,11 +351,16 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
     setCoachProgramLoading(false);
 
     if (!result.ok) {
-      setError(result.error ?? 'Publication impossible.');
+      setCoachProgramError(result.error ?? 'Publication impossible.');
+      setAdminMessage(result.error ?? 'Publication impossible.');
       return;
     }
 
-    setCoachProgramMessage(`Programme semaine ${coachProgramWeek} publié pour ${coachProgramUserId.trim()}.`);
+    const successMessage = `Programme semaine ${coachProgramWeek} publié pour ${coachProgramUserId.trim()}${
+      result.storagePath ? ` (${result.storagePath})` : ''
+    }.`;
+    setCoachProgramMessage(successMessage);
+    setAdminMessage(successMessage);
     setCoachProgramFile(null);
     const input = document.getElementById('coach-program-file') as HTMLInputElement | null;
     if (input) input.value = '';
@@ -355,8 +409,10 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
 
   return (
     <section className="page profile-page">
-      <h1>Profil</h1>
-      <p className="page-subtitle">Ton espace compte, préférences et sécurité.</p>
+      <div className="profile-page-head">
+        <h1>Profil</h1>
+        <p className="page-subtitle">Ton espace compte, préférences et sécurité.</p>
+      </div>
 
       <article className="card premium-section profile-hero-card">
         <div className="profile-hero-main">
@@ -389,21 +445,23 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
             <strong>{runnerLevelLabel}</strong>
           </article>
           <article className="profile-snapshot-item">
-            <p>Archetype</p>
-            <strong>{runnerArchetypeLabel}</strong>
+            <p>Focus</p>
+            <strong>{runnerFocusLabel}</strong>
           </article>
         </div>
 
         <div className="profile-runner-summary">
-          <h3>Profil coureur</h3>
+          <h3>Ton profil du moment</h3>
           {runnerAssessment ? (
             <>
               <p className="profile-runner-headline">
-                <strong>{formatRunnerArchetype(runnerAssessment.result.archetype)}</strong> · Niveau{' '}
-                <strong>{formatRunnerLevel(runnerAssessment.result.level)}</strong>
+                <strong>{formatRunnerLevel(runnerAssessment.result.level)}</strong> · Focus{' '}
+                <strong>{formatRunnerFocus(runnerAssessment.result.focus)}</strong>
               </p>
-              <p className="profile-runner-explainer">{getRunnerArchetypeDescription(runnerAssessment.result.archetype)}</p>
-              <p className="profile-runner-caution">{runnerAssessment.result.caution}</p>
+              <p className="profile-runner-explainer">{runnerProfileLead}</p>
+              <p className="profile-runner-caution">
+                <strong>Ton point fort actuel :</strong> {runnerProfileStrength}
+              </p>
               {shouldPromptRunnerAssessment ? (
                 <p className="inline-info">Un nouveau test est recommandé (plus de 30 jours).</p>
               ) : null}
@@ -414,10 +472,10 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
         </div>
 
         <div className="profile-quick-actions">
-          <Link to="/profil-coureur" className="btn-compact">
+          <Link to="/profil-coureur" className="profile-edit-toggle profile-hero-action">
             Faire / refaire le test
           </Link>
-          <Link to="/abonnement" className="btn-compact">
+          <Link to="/abonnement" className="profile-edit-toggle profile-hero-action">
             Voir abonnement
           </Link>
           <button
@@ -435,7 +493,10 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
 
       <div className="list profile-grid profile-grid-premium">
         <article className="card premium-section profile-card">
-          <h2>Identité</h2>
+          <div className="profile-card-head">
+            <span className="profile-card-kicker">Compte</span>
+            <h2>Identité</h2>
+          </div>
           <div className="profile-readonly">
             <div className="profile-readonly-row">
               <span>Nom affiché</span>
@@ -487,7 +548,10 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
         </article>
 
         <article className="card premium-section profile-card">
-          <h2>Sécurité du compte</h2>
+          <div className="profile-card-head">
+            <span className="profile-card-kicker">Protection</span>
+            <h2>Sécurité du compte</h2>
+          </div>
           <div className="profile-readonly">
             <div className="profile-readonly-row">
               <span>Email</span>
@@ -594,7 +658,10 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
         </article>
 
         <article className="card premium-section profile-card">
-          <h2>Communication</h2>
+          <div className="profile-card-head">
+            <span className="profile-card-kicker">Préférences</span>
+            <h2>Communication</h2>
+          </div>
           <form className="form auth-form" onSubmit={onContactSave}>
             <label className="auth-checkbox-row">
               <input
@@ -613,29 +680,12 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
           </form>
         </article>
 
-        <article className="card premium-section profile-card">
-          <h2>Affichage sidebar</h2>
-          <form className="form auth-form" onSubmit={onSidebarSave}>
-            <label>
-              Résumé d’activité
-              <select
-                value={sidebarScope}
-                onChange={(event) => setSidebarScope(event.target.value as SidebarStatsScope)}
-              >
-                <option value="WEEK">Hebdomadaire</option>
-                <option value="MONTH">Mensuelle</option>
-                <option value="TOTAL">Totale</option>
-              </select>
-            </label>
-            {sidebarMessage ? <p className="inline-info">{sidebarMessage}</p> : null}
-            {error ? <p className="error">{error}</p> : null}
-            <button type="submit">Enregistrer l’affichage</button>
-          </form>
-        </article>
-
         {isModo ? (
           <article className="card premium-section profile-card profile-card-modo">
-            <h2>Espace modérateur · contacts email</h2>
+            <div className="profile-card-head">
+              <span className="profile-card-kicker">Administration</span>
+              <h2>Espace modérateur · contacts email</h2>
+            </div>
             <p className="page-subtitle">
               Liste locale des utilisateurs de cet appareil avec statut de consentement email.
             </p>
@@ -698,9 +748,41 @@ export default function Profile({ runnerAssessment, shouldPromptRunnerAssessment
                     />
                   </label>
                   {coachProgramMessage ? <p className="inline-info">{coachProgramMessage}</p> : null}
-                  {error ? <p className="error">{error}</p> : null}
+                  {coachProgramError ? <p className="error">{coachProgramError}</p> : null}
                   <button type="submit" disabled={coachProgramLoading}>
                     {coachProgramLoading ? 'Publication...' : 'Publier le programme'}
+                  </button>
+                </form>
+
+                <form className="form auth-form" onSubmit={(event) => void onForceCoachFeedback(event)}>
+                  <h3>Forcer un retour coach</h3>
+                  <p className="page-subtitle">
+                    Déclenche l’envoi automatique pour une semaine calendaire précise. Exemple: `2026-W10`.
+                  </p>
+                  <label>
+                    UUID utilisateur
+                    <input
+                      type="text"
+                      value={coachForceUserId}
+                      onChange={(event) => setCoachForceUserId(event.target.value)}
+                      placeholder="Ex: 1faf54d1-e63d-4ae6-966b-e5acd6ed2c2f"
+                      disabled={coachForceLoading}
+                    />
+                  </label>
+                  <label>
+                    Semaine ISO
+                    <input
+                      type="text"
+                      value={coachForceWeekKey}
+                      onChange={(event) => setCoachForceWeekKey(event.target.value)}
+                      placeholder="Ex: 2026-W10"
+                      disabled={coachForceLoading}
+                    />
+                  </label>
+                  {coachForceMessage ? <p className="inline-info">{coachForceMessage}</p> : null}
+                  {coachForceError ? <p className="error">{coachForceError}</p> : null}
+                  <button type="submit" disabled={coachForceLoading}>
+                    {coachForceLoading ? 'Envoi...' : 'Forcer le retour'}
                   </button>
                 </form>
 
