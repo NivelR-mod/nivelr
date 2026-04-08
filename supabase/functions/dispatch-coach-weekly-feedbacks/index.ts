@@ -18,6 +18,7 @@ type CoachFeedbackRow = {
   id: string;
   user_id: string;
   week_number: number;
+  feedback_week_key?: string | null;
   delivery_status: 'PENDING' | 'SENT' | 'ERROR' | null;
 };
 
@@ -38,6 +39,7 @@ type SessionLike = {
   id?: string;
   createdAt?: string;
   created_at?: string;
+  comment?: string;
   subtype?: string;
   distanceKm?: number;
   distance_km?: number;
@@ -126,6 +128,22 @@ function getCoachFeedbackWeekKeyFromParisClock(clock: ReturnType<typeof getParis
   return getWeekKeyFromDate(clock.dateForWeekKey);
 }
 
+function normalizeAdminEmail(input: string): string {
+  const email = input.trim().toLowerCase();
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [localPart, domain] = parts;
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    const localWithoutAlias = localPart.split('+')[0].replace(/\./g, '');
+    return `${localWithoutAlias}@gmail.com`;
+  }
+  return email;
+}
+
+function isValidWeekKey(input: string): boolean {
+  return /^\d{4}-W\d{2}$/.test(input);
+}
+
 function isDeliverySent(status: string | null | undefined): boolean {
   if (!status) return true;
   return status === 'SENT';
@@ -135,6 +153,7 @@ function normalizeSession(raw: SessionLike, fallbackIndex: number): {
   id: string;
   createdAt: string;
   subtype: string;
+  comment?: string;
   distanceKm?: number;
   durationMin: number;
   rpe: number;
@@ -163,11 +182,17 @@ function normalizeSession(raw: SessionLike, fallbackIndex: number): {
     id: typeof raw.id === 'string' && raw.id ? raw.id : `session-${fallbackIndex}`,
     createdAt,
     subtype: typeof raw.subtype === 'string' && raw.subtype ? raw.subtype : 'RUN',
+    comment: typeof raw.comment === 'string' ? raw.comment.trim() || undefined : undefined,
     distanceKm: typeof distanceKm === 'number' && Number.isFinite(distanceKm) ? distanceKm : undefined,
     durationMin,
     rpe: Math.max(1, Math.min(10, Math.round(raw.feelings?.rpe ?? 5))),
     fatigue: Math.max(1, Math.min(5, Math.round(raw.feelings?.fatigue ?? 3)))
   };
+}
+
+function formatCoachSessionNote(note?: string): string {
+  const trimmed = (note ?? '').trim();
+  return trimmed || 'Aucune note ajoutée.';
 }
 
 function getCurrentWeekSessions(
@@ -201,7 +226,7 @@ function buildCoachFeedbackTextFromSessions(weekNumber: number, sessions: Return
       `Rythme (min/km): ${formatPaceLabel(session.distanceKm, session.durationMin)}`,
       `RPE moyen: ${session.rpe}`,
       `Fatigue (1-5): ${session.fatigue}`,
-      'Note libre séance: Retour généré automatiquement depuis la séance enregistrée.'
+      `Note libre séance: ${formatCoachSessionNote(session.comment)}`
     ]),
     '',
     '=== RETOUR GÉNÉRAL ===',
@@ -222,21 +247,54 @@ Deno.serve(async (request) => {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
-  const cronSecret = (Deno.env.get('COACH_CRON_SECRET') ?? '').trim();
-  const requestSecret = (request.headers.get('x-cron-secret') ?? '').trim();
-  if (!cronSecret || requestSecret !== cronSecret) {
-    return json({ error: 'unauthorized' }, { status: 401 });
-  }
-
-  const force = request.method === 'POST'
+  const requestBody = request.method === 'POST'
     ? await request
         .json()
-        .then((data) => Boolean((data as { force?: boolean }).force))
-        .catch(() => false)
-    : false;
+        .catch(() => ({} as { force?: boolean; targetWeekKey?: string; targetUserId?: string }))
+    : ({} as { force?: boolean; targetWeekKey?: string; targetUserId?: string });
+
+  const cronSecret = (Deno.env.get('COACH_CRON_SECRET') ?? '').trim();
+  const requestSecret = (request.headers.get('x-cron-secret') ?? '').trim();
+  const force = Boolean(requestBody.force);
+  const targetWeekKey = String(requestBody.targetWeekKey ?? '').trim();
+  const targetUserId = String(requestBody.targetUserId ?? '').trim();
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json({ error: 'missing_supabase_service_role' }, { status: 500 });
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+
+  let triggeredBy: 'cron' | 'admin' | null = null;
+  if (cronSecret && requestSecret === cronSecret) {
+    triggeredBy = 'cron';
+  } else {
+    const authHeader = request.headers.get('Authorization') ?? '';
+    const accessToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!accessToken) {
+      return json({ error: 'unauthorized' }, { status: 401 });
+    }
+    const authUser = await supabase.auth.getUser(accessToken);
+    if (authUser.error || !authUser.data.user?.email) {
+      return json({ error: 'unauthorized' }, { status: 401 });
+    }
+    const allowedAdminEmails = (Deno.env.get('MODO_ADMIN_EMAIL') ?? 'nivelr2026@gmail.com')
+      .split(',')
+      .map((item) => normalizeAdminEmail(item))
+      .filter(Boolean);
+    const requesterEmail = normalizeAdminEmail(authUser.data.user.email);
+    if (!allowedAdminEmails.includes(requesterEmail)) {
+      return json({ error: 'forbidden' }, { status: 403 });
+    }
+    triggeredBy = 'admin';
+  }
 
   const { weekday, hour, minute, dateForWeekKey } = getParisClock(new Date());
-  if (!force) {
+  if (triggeredBy === 'cron' && !force) {
     const afterDeadline = hour > 20 || (hour === 20 && minute >= 30);
     if (weekday !== 'Sun' || !afterDeadline) {
       return json({
@@ -249,29 +307,22 @@ Deno.serve(async (request) => {
       });
     }
   }
-
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const resendApiKey = Deno.env.get('RESEND_API_KEY') ?? '';
   const toEmail = Deno.env.get('CONTACT_TO_EMAIL') ?? '';
   const fromEmail = Deno.env.get('CONTACT_FROM_EMAIL') ?? '';
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json({ error: 'missing_supabase_service_role' }, { status: 500 });
-  }
   if (!resendApiKey || !toEmail || !fromEmail) {
     return json({ error: 'missing_mail_secrets' }, { status: 500 });
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
   const resend = new Resend(resendApiKey);
-  const feedbackWeekKey = getCoachFeedbackWeekKeyFromParisClock({ weekday, hour, minute, dateForWeekKey });
+  const feedbackWeekKey = isValidWeekKey(targetWeekKey)
+    ? targetWeekKey
+    : getCoachFeedbackWeekKeyFromParisClock({ weekday, hour, minute, dateForWeekKey });
 
   const [programsRes, feedbacksRes, statesRes, profilesRes, intakesRes] = await Promise.all([
     supabase.from('coach_programs').select('id,user_id,week_number,status').eq('status', 'PUBLISHED').order('week_number', { ascending: true }),
-    supabase.from('coach_feedbacks').select('id,user_id,week_number,delivery_status'),
+    supabase.from('coach_feedbacks').select('id,user_id,week_number,feedback_week_key,delivery_status'),
     supabase.from('user_app_state').select('user_id,state_json'),
     supabase.from('user_public_profiles').select('user_id,display_name,handle'),
     supabase.from('coach_intakes').select('user_id')
@@ -287,12 +338,14 @@ Deno.serve(async (request) => {
   const latestProgramByUser = new Map<string, CoachProgramRow>();
   for (const row of (programsRes.data ?? []) as CoachProgramRow[]) {
     if (!intakeUserIds.has(row.user_id)) continue;
+    if (targetUserId && row.user_id !== targetUserId) continue;
     latestProgramByUser.set(row.user_id, row);
   }
 
   const feedbackByUserWeek = new Map<string, CoachFeedbackRow>();
   for (const row of (feedbacksRes.data ?? []) as CoachFeedbackRow[]) {
-    feedbackByUserWeek.set(`${row.user_id}:${row.week_number}`, row);
+    const key = `${row.user_id}:${row.feedback_week_key ?? ''}`;
+    feedbackByUserWeek.set(key, row);
   }
 
   const stateByUser = new Map<string, UserAppStateRow>();
@@ -308,7 +361,7 @@ Deno.serve(async (request) => {
   const results: Array<Record<string, unknown>> = [];
 
   for (const [userId, program] of latestProgramByUser.entries()) {
-    const existingFeedback = feedbackByUserWeek.get(`${userId}:${program.week_number}`);
+    const existingFeedback = feedbackByUserWeek.get(`${userId}:${feedbackWeekKey}`);
     if (existingFeedback && isDeliverySent(existingFeedback.delivery_status)) {
       continue;
     }
@@ -327,6 +380,7 @@ Deno.serve(async (request) => {
         {
           user_id: userId,
           week_number: program.week_number,
+          feedback_week_key: feedbackWeekKey,
           feedback_text: buildCoachFeedbackTextFromSessions(program.week_number, currentWeekSessions),
           ready_for_next_week: true,
           submitted_at: new Date().toISOString(),
@@ -336,7 +390,7 @@ Deno.serve(async (request) => {
           emailed_at: null,
           delivery_error: 'missing_user_email'
         },
-        { onConflict: 'user_id,week_number' }
+        { onConflict: 'user_id,feedback_week_key' }
       );
       results.push({ userId, weekNumber: program.week_number, status: 'error', reason: 'missing_user_email' });
       continue;
@@ -356,6 +410,7 @@ Deno.serve(async (request) => {
     const upsertBase = {
       user_id: userId,
       week_number: program.week_number,
+      feedback_week_key: feedbackWeekKey,
       feedback_text: feedbackText,
       ready_for_next_week: true,
       submitted_at: new Date().toISOString(),
@@ -370,7 +425,7 @@ Deno.serve(async (request) => {
         emailed_at: null,
         delivery_error: null
       },
-      { onConflict: 'user_id,week_number' }
+      { onConflict: 'user_id,feedback_week_key' }
     );
     if (pendingError) {
       results.push({ userId, weekNumber: program.week_number, status: 'error', reason: pendingError.message });
@@ -404,7 +459,7 @@ Deno.serve(async (request) => {
           emailed_at: null,
           delivery_error: mailError.message
         },
-        { onConflict: 'user_id,week_number' }
+        { onConflict: 'user_id,feedback_week_key' }
       );
       results.push({ userId, weekNumber: program.week_number, status: 'error', reason: mailError.message });
       continue;
@@ -417,14 +472,21 @@ Deno.serve(async (request) => {
         emailed_at: new Date().toISOString(),
         delivery_error: null
       },
-      { onConflict: 'user_id,week_number' }
+      { onConflict: 'user_id,feedback_week_key' }
     );
-    results.push({ userId, weekNumber: program.week_number, status: 'sent', sessions: currentWeekSessions.length });
+    results.push({
+      userId,
+      weekNumber: program.week_number,
+      feedbackWeekKey,
+      status: 'sent',
+      sessions: currentWeekSessions.length
+    });
   }
 
   return json({
     ok: true,
     force,
+    triggeredBy,
     currentWeekKey: feedbackWeekKey,
     processed: results.length,
     results

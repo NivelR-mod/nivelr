@@ -20,8 +20,10 @@ export interface CoachHubData {
   publishedPrograms: CoachProgramSummary[];
   activeProgram: CoachProgramSummary | null;
   feedbackAlreadySent: boolean;
+  currentFeedbackWeekKey: string;
   activeFeedback: {
     weekNumber: number;
+    feedbackWeekKey: string | null;
     feedbackText: string;
     readyForNextWeek: boolean;
     submittedAt: string;
@@ -51,6 +53,7 @@ type CoachProgramRow = {
 
 type CoachFeedbackRow = {
   week_number: number;
+  feedback_week_key?: string | null;
   feedback_text: string;
   ready_for_next_week: boolean;
   submitted_at: string;
@@ -119,10 +122,31 @@ export function getCoachFeedbackWeekKey(now: Date = new Date()): string {
   return getWeekKeyFromDate(now);
 }
 
+function startOfIsoWeek(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  const day = next.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  next.setDate(next.getDate() + diff);
+  return next;
+}
+
+function endOfIsoWeek(date: Date): Date {
+  const start = startOfIsoWeek(date);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
 export function getCurrentWeekCoachSessions(sessions: Session[], now: Date = new Date()): Session[] {
-  const currentWeekKey = getCoachFeedbackWeekKey(now);
+  const weekStart = startOfIsoWeek(now).getTime();
+  const weekEnd = endOfIsoWeek(now).getTime();
   return sessions
-    .filter((session) => getWeekKeyFromDate(new Date(session.createdAt)) === currentWeekKey)
+    .filter((session) => {
+      const createdAt = new Date(session.createdAt).getTime();
+      return createdAt >= weekStart && createdAt <= weekEnd;
+    })
     .slice()
     .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
 }
@@ -142,6 +166,11 @@ export function getCoachSessionSummaries(sessions: Session[]): CoachSessionAutoS
     rpe: session.feelings.rpe,
     fatigue: session.feelings.fatigue
   }));
+}
+
+function formatCoachSessionNote(note?: string): string {
+  const trimmed = (note ?? '').trim();
+  return trimmed || 'Aucune note ajoutée.';
 }
 
 export function buildCoachFeedbackTextFromSessions(
@@ -170,7 +199,7 @@ export function buildCoachFeedbackTextFromSessions(
       `Rythme (min/km): ${session.paceLabel}`,
       `RPE moyen: ${session.rpe}`,
       `Fatigue (1-5): ${session.fatigue}`,
-      'Note libre séance: Retour généré automatiquement depuis la séance enregistrée.'
+      `Note libre séance: ${formatCoachSessionNote(sessions.find((item) => item.id === session.id)?.comment)}`
     ]),
     '',
     '=== RETOUR GÉNÉRAL ===',
@@ -265,7 +294,7 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
     .order('week_number', { ascending: true });
   const feedbackPromise = supabase!
     .from('coach_feedbacks')
-    .select('week_number, feedback_text, ready_for_next_week, submitted_at, delivery_status')
+    .select('week_number, feedback_week_key, feedback_text, ready_for_next_week, submitted_at, delivery_status')
     .eq('user_id', userId);
 
   const [intakeRes, programsRes, feedbackRes] = await Promise.all([intakePromise, programsPromise, feedbackPromise]);
@@ -275,17 +304,16 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
 
   const programs = ((programsRes.data ?? []) as CoachProgramRow[]).map(mapProgramRow);
   const feedbackRows = (feedbackRes.data ?? []) as CoachFeedbackRow[];
-  const sentFeedbackWeeks = new Set(
+  const currentFeedbackWeekKey = getCoachFeedbackWeekKey();
+  const sentFeedbackWeekKeys = new Set(
     feedbackRows
-      .filter((row) => !row.delivery_status || row.delivery_status === 'SENT')
-      .map((row) => row.week_number)
+      .filter((row) => row.feedback_week_key && (!row.delivery_status || row.delivery_status === 'SENT'))
+      .map((row) => row.feedback_week_key as string)
   );
-  const firstPendingProgram = programs.find((program) => !sentFeedbackWeeks.has(program.weekNumber));
   const latestProgram = programs.length ? programs[programs.length - 1] : null;
-  const activeProgram = firstPendingProgram ?? latestProgram ?? null;
-  const activeFeedbackRow = activeProgram
-    ? feedbackRows.find((row) => row.week_number === activeProgram.weekNumber) ?? null
-    : null;
+  const activeProgram = latestProgram ?? null;
+  const activeFeedbackRow =
+    feedbackRows.find((row) => row.feedback_week_key === currentFeedbackWeekKey) ?? null;
 
   return {
     ok: true,
@@ -294,14 +322,12 @@ export async function getCoachHubData(): Promise<{ ok: boolean; data?: CoachHubD
       intakeCompletedAt: intakeRes.data?.completed_at ?? null,
       publishedPrograms: programs,
       activeProgram,
-      feedbackAlreadySent: activeProgram
-        ? Boolean(
-            activeFeedbackRow && (!activeFeedbackRow.delivery_status || activeFeedbackRow.delivery_status === 'SENT')
-          )
-        : false,
+      feedbackAlreadySent: sentFeedbackWeekKeys.has(currentFeedbackWeekKey),
+      currentFeedbackWeekKey,
       activeFeedback: activeFeedbackRow
         ? {
             weekNumber: activeFeedbackRow.week_number,
+            feedbackWeekKey: activeFeedbackRow.feedback_week_key ?? null,
             feedbackText: activeFeedbackRow.feedback_text,
             readyForNextWeek: activeFeedbackRow.ready_for_next_week,
             submittedAt: activeFeedbackRow.submitted_at
@@ -383,6 +409,7 @@ export async function submitCoachFeedback(input: {
   weekNumber: number;
   feedbackText: string;
   readyForNextWeek: boolean;
+  feedbackWeekKey?: string;
 }): Promise<{ ok: boolean; error?: string; warning?: string }> {
   if (!canUseCoachCloud()) {
     return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
@@ -394,9 +421,14 @@ export async function submitCoachFeedback(input: {
   }
 
   const trimmedFeedback = input.feedbackText.trim();
+  const feedbackWeekKey = (input.feedbackWeekKey ?? getCoachFeedbackWeekKey()).trim();
+  if (!feedbackWeekKey) {
+    return { ok: false, error: 'Semaine de feedback invalide.' };
+  }
   const payload = {
     user_id: userId,
     week_number: input.weekNumber,
+    feedback_week_key: feedbackWeekKey,
     feedback_text: trimmedFeedback,
     ready_for_next_week: input.readyForNextWeek,
     submitted_at: new Date().toISOString(),
@@ -408,7 +440,7 @@ export async function submitCoachFeedback(input: {
   };
 
   const { error } = await supabase!.from('coach_feedbacks').upsert(payload, {
-    onConflict: 'user_id,week_number'
+    onConflict: 'user_id,feedback_week_key'
   });
   if (error) return { ok: false, error: error.message };
 
@@ -449,7 +481,7 @@ export async function submitCoachFeedback(input: {
           updated_at: new Date().toISOString()
         })
         .eq('user_id', userId)
-        .eq('week_number', input.weekNumber);
+        .eq('feedback_week_key', feedbackWeekKey);
       return { ok: true };
     }
     await supabase!
@@ -461,7 +493,7 @@ export async function submitCoachFeedback(input: {
         updated_at: new Date().toISOString()
       })
       .eq('user_id', userId)
-      .eq('week_number', input.weekNumber);
+      .eq('feedback_week_key', feedbackWeekKey);
     return {
       ok: true,
       warning:
@@ -478,9 +510,62 @@ export async function submitCoachFeedback(input: {
       updated_at: new Date().toISOString()
     })
     .eq('user_id', userId)
-    .eq('week_number', input.weekNumber);
+    .eq('feedback_week_key', feedbackWeekKey);
 
   return { ok: true };
+}
+
+export async function forceCoachFeedbackAdmin(input: {
+  userId: string;
+  feedbackWeekKey: string;
+}): Promise<{ ok: boolean; error?: string; processed?: number; result?: Record<string, unknown> }> {
+  if (!canUseCoachCloud()) {
+    return { ok: false, error: 'Coach indisponible: active la synchronisation cloud.' };
+  }
+
+  const { data: sessionData } = await supabase!.auth.getSession();
+  const accessToken = sessionData.session?.access_token?.trim() ?? '';
+  if (!accessToken) {
+    return { ok: false, error: 'Session expirée. Reconnecte-toi puis réessaie.' };
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+  if (!supabaseUrl) {
+    return { ok: false, error: 'Configuration Supabase manquante.' };
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/dispatch-coach-weekly-feedbacks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        force: true,
+        targetUserId: input.userId.trim(),
+        targetWeekKey: input.feedbackWeekKey.trim()
+      })
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      processed?: number;
+      results?: Record<string, unknown>[];
+    };
+    if (!response.ok || !payload.ok) {
+      return { ok: false, error: payload.error ?? 'Envoi admin impossible.' };
+    }
+
+    return {
+      ok: true,
+      processed: payload.processed ?? 0,
+      result: Array.isArray(payload.results) ? payload.results[0] : undefined
+    };
+  } catch {
+    return { ok: false, error: 'Envoi admin impossible pour le moment.' };
+  }
 }
 
 export async function uploadCoachProgramAdmin(input: {
