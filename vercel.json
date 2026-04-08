@@ -2,7 +2,15 @@
   "crons": [
     {
       "path": "/api/cron/coach-weekly-feedbacks",
-      "schedule": "0 20 * * 0"
+      "schedule": "30 18 * * 0"
+    },
+    {
+      "path": "/api/cron/coach-weekly-feedbacks",
+      "schedule": "30 19 * * 0"
+    },
+    {
+      "path": "/api/cron/coach-weekly-feedbacks",
+      "schedule": "30 20 * * 0"
     }
   ],
   "headers": [
